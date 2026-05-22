@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "article": {
+      "title": "Article",
+      "description": "A news article.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "author": { "type": "string" },
+        "role": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "contentArr": { "type": "array", "items": { "type": "string" } },
+        "contentStr": { "type": "string" },
+        "status": { "type": "string", "enum": ["published", "archived"] }
+      },
+      "required": ["title", "author", "date", "status"]
+    }
+  },
+  "firestore": {
+    "articles/{articleId}": {
+      "schema": "article",
+      "description": "Collection of all news articles."
+    }
+  }
+}

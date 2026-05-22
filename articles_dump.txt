@@ -1,0 +1,201 @@
+22:const ARTICLES = [
+23-  {
+24-    id: "featured-1",
+25-    title: "Global Markets Rally as Tech Sector Shows Unexpected Resilience",
+26-    subtitle: "Despite early quarter concerns, major technology firms report record-breaking earnings, driving indices to all-time highs and easing recession fears.",
+27-    excerpt: "Despite early quarter concerns, major technology firms report record-breaking earnings, driving indices to all-time highs and easing recession fears.",
+28-    author: "Sarah Jenkins",
+29-    role: "Senior Financial Correspondent",
+30-    date: "April 14, 2026",
+31-    time: "2 hours ago",
+32-    category: "Business",
+33-    imageUrl: "https://picsum.photos/seed/markets/1200/800",
+34-    content: [
+35-      "The global financial markets experienced an unprecedented surge today, driven largely by a tech sector that refused to bow to early-quarter pessimism. Major indices across North America, Europe, and Asia closed at record highs, painting a picture of a global economy that is far more resilient than analysts predicted just months ago.",
+36-      "At the heart of this rally are the quarterly earnings reports from the 'Big Tech' conglomerates. Defying expectations of a slowdown due to regulatory pressures and supply chain bottlenecks, these companies posted record-breaking revenues. The surge was led by unexpected growth in cloud computing divisions and enterprise AI solutions, which saw adoption rates double compared to the previous fiscal year.",
+37-      "\"What we're seeing is a fundamental shift in how businesses are investing in technology,\" explained Dr. Aris Thorne, Chief Economist at Global Horizon Bank. \"It's no longer about expansion; it's about efficiency. The tools these tech giants are providing are becoming indispensable for companies trying to navigate a complex global market.\"",
+38-      "The ripple effect of this tech rally was felt across other sectors. Consumer discretionary stocks saw a modest bump, while industrials held steady. However, the bond market saw a slight dip as investors moved capital into equities, chasing the higher yields promised by the tech sector's performance.",
+39-      "Despite the overwhelming optimism, some analysts are urging caution. The rapid ascent of these stocks has raised concerns about overvaluation. \"We are in uncharted territory,\" warned Elena Rostova, a market strategist. \"While the fundamentals are strong, the speed of this rally leaves little room for error. Any negative news, whether geopolitical or economic, could trigger a sharp correction.\"",
+40-      "For now, however, the bulls are firmly in control. As the trading day closed, the atmosphere on the trading floors was one of cautious jubilation. The tech sector has once again proven its ability to drive the broader market, leaving investors eagerly anticipating the next wave of innovation and growth."
+41-    ]
+42-  },
+43-  {
+44-    id: "sec-1",
+45-    title: "New Climate Accord Reached in Geneva Summit",
+46-    subtitle: "World leaders agree on aggressive new carbon reduction targets for 2035.",
+47-    excerpt: "World leaders agree on aggressive new carbon reduction targets for 2035.",
+48-    author: "David Chen",
+49-    role: "Environmental Editor",
+50-    date: "April 14, 2026",
+51-    category: "World",
+52-    time: "4 hours ago",
+53-    imageUrl: "https://picsum.photos/seed/climate/600/400",
+54-    content: generateContent("New Climate Accord Reached in Geneva Summit")
+55-  },
+56-  {
+57-    id: "sec-2",
+58-    title: "Central Bank Signals Potential Rate Cuts by Q3",
+59-    subtitle: "Inflation cools faster than expected, prompting a shift in monetary policy.",
+60-    excerpt: "Inflation cools faster than expected, prompting a shift in monetary policy.",
+61-    author: "Michael Ross",
+62-    role: "Economics Reporter",
+63-    date: "April 14, 2026",
+64-    category: "Business",
+65-    time: "5 hours ago",
+66-    imageUrl: "https://picsum.photos/seed/bank/600/400",
+67-    content: generateContent("Central Bank Signals Potential Rate Cuts by Q3")
+68-  },
+69-  {
+70-    id: "sec-3",
+71-    title: "Breakthrough in Quantum Computing Architecture",
+72-    subtitle: "Researchers achieve stable qubits at room temperature, a holy grail for computing.",
+73-    excerpt: "Researchers achieve stable qubits at room temperature, a holy grail for computing.",
+74-    author: "Dr. Elena Rostova",
+75-    role: "Science Contributor",
+76-    date: "April 14, 2026",
+77-    category: "Tech",
+78-    time: "6 hours ago",
+79-    imageUrl: "https://picsum.photos/seed/quantum/600/400",
+80-    content: generateContent("Breakthrough in Quantum Computing Architecture")
+81-  },
+82-  {
+83-    id: "sec-4",
+84-    title: "Urban Planning Shift: The Rise of 15-Minute Cities",
+85-    subtitle: "How metropolises are redesigning themselves for hyper-local living.",
+86-    excerpt: "How metropolises are redesigning themselves for hyper-local living.",
+87-    author: "James Wilson",
+88-    role: "Urban Affairs",
+89-    date: "April 14, 2026",
+90-    category: "Science",
+91-    time: "8 hours ago",
+92-    imageUrl: "https://picsum.photos/seed/city/600/400",
+93-    content: generateContent("Urban Planning Shift: The Rise of 15-Minute Cities")
+94-  },
+95-  {
+96-    id: "trend-1",
+97-    title: "Elections 2026: Key Battleground States Shift",
+98-    subtitle: "Recent polling shows unexpected demographic realignments.",
+99-    excerpt: "Recent polling shows unexpected demographic realignments.",
+100-    author: "Amanda Pierce",
+101-    role: "Political Analyst",
+102-    date: "April 13, 2026",
+103-    category: "Politics",
+104-    time: "12 hours ago",
+105-    imageUrl: "https://picsum.photos/seed/vote/600/400",
+106-    content: generateContent("Elections 2026: Key Battleground States Shift")
+107-  },
+108-  {
+109-    id: "trend-2",
+110-    title: "The Future of Remote Work: Post-Pandemic Reality",
+111-    subtitle: "Companies settle into permanent hybrid models as office leases expire.",
+112-    excerpt: "Companies settle into permanent hybrid models as office leases expire.",
+113-    author: "Marcus Johnson",
+114-    role: "Workplace Reporter",
+115-    date: "April 13, 2026",
+116-    category: "Business",
+117-    time: "14 hours ago",
+118-    imageUrl: "https://picsum.photos/seed/office/600/400",
+119-    content: generateContent("The Future of Remote Work: Post-Pandemic Reality")
+120-  },
+121-  {
+122-    id: "trend-3",
+123-    title: "Electric Vehicle Sales Surpass Traditional Autos in Europe",
+124-    subtitle: "A historic milestone for the automotive industry.",
+125-    excerpt: "A historic milestone for the automotive industry.",
+126-    author: "Sophie Laurent",
+127-    role: "European Correspondent",
+128-    date: "April 13, 2026",
+129-    category: "Tech",
+130-    time: "16 hours ago",
+131-    imageUrl: "https://picsum.photos/seed/ev/600/400",
+132-    content: generateContent("Electric Vehicle Sales Surpass Traditional Autos in Europe")
+133-  },
+134-  {
+135-    id: "trend-4",
+136-    title: "Healthcare Reform Bill Passes Senate with Narrow Margin",
+137-    subtitle: "Sweeping changes to prescription drug pricing approved.",
+138-    excerpt: "Sweeping changes to prescription drug pricing approved.",
+139-    author: "Thomas Wright",
+140-    role: "Capitol Hill Reporter",
+141-    date: "April 13, 2026",
+142-    category: "Health",
+143-    time: "18 hours ago",
+144-    imageUrl: "https://picsum.photos/seed/health/600/400",
+145-    content: generateContent("Healthcare Reform Bill Passes Senate with Narrow Margin")
+146-  },
+147-  {
+148-    id: "trend-5",
+149-    title: "Space Tourism: First Commercial Flight Scheduled for Next Month",
+150-    subtitle: "Civilian passengers prepare for suborbital journey.",
+151-    excerpt: "Civilian passengers prepare for suborbital journey.",
+152-    author: "Dr. Elena Rostova",
+153-    role: "Science Contributor",
+154-    date: "April 12, 2026",
+155-    category: "Science",
+156-    time: "1 day ago",
+157-    imageUrl: "https://picsum.photos/seed/space/600/400",
+158-    content: generateContent("Space Tourism: First Commercial Flight Scheduled for Next Month")
+159-  }
+160-];
+161-
+162-// --- Components ---
+163-
+164-const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: string, height?: string, format?: string, className?: string }) => {
+165-  return (
+166-    <div 
+167-      className={`ad-placeholder ${className}`} 
+168-      style={{ width: width || '100%', height: height || '250px' }}
+169-      aria-label="Advertisement"
+170-    >
+171-      <span className="mb-1 font-semibold">Advertisement</span>
+172-      <span className="text-[10px] opacity-70">
+173-        {width && height ? `${width} x ${height}` : format}
+174-      </span>
+175-    </div>
+176-  );
+177-};
+178-
+179-// SEO Component
+180-const SEO = ({ title, description, url, imageUrl, type = 'website', author, datePublished, schemaMarkup }: { title: string, description: string, url?: string, imageUrl?: string, type?: string, author?: string, datePublished?: string, schemaMarkup?: object }) => {
+181-  const siteTitle = 'Lensa Insignia';
+182-  const fullTitle = title === siteTitle ? title : `${title} | ${siteTitle}`;
+183-  
+184-  return (
+185-    <Helmet>
+186-      <title>{fullTitle}</title>
+187-      <meta name="description" content={description} />
+188-      <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+189-      {url && <link rel="canonical" href={url} />}
+190-      
+191-      <meta property="og:title" content={fullTitle} />
+192-      <meta property="og:description" content={description} />
+193-      <meta property="og:type" content={type} />
+194-      {url && <meta property="og:url" content={url} />}
+195-      {imageUrl && <meta property="og:image" content={imageUrl} />}
+196-      
+197-      {type === 'article' && author && <meta property="article:author" content={author} />}
+198-      {type === 'article' && datePublished && <meta property="article:published_time" content={datePublished} />}
+199-
+200-      <meta name="twitter:card" content="summary_large_image" />
+201-      <meta name="twitter:title" content={fullTitle} />
+202-      <meta name="twitter:description" content={description} />
+203-      {imageUrl && <meta name="twitter:image" content={imageUrl} />}
+204-
+205-      {schemaMarkup && (
+206-        <script type="application/ld+json">
+207-          {JSON.stringify(schemaMarkup)}
+208-        </script>
+209-      )}
+210-    </Helmet>
+211-  );
+212-};
+213-
+214-// Scroll to top on route change
+215-const ScrollToTop = () => {
+216-  const { pathname, search } = useLocation();
+217-  useEffect(() => {
+218-    window.scrollTo(0, 0);
+219-  }, [pathname, search]);
+220-  return null;
+221-};
+222-

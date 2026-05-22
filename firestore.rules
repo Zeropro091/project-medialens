@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reusable validation
+    function isSignedIn() { return request.auth != null; }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidArticle() {
+      return incoming().keys().hasAll(['title', 'author', 'date', 'status'])
+        && incoming().title is string && incoming().title.size() > 0
+        && incoming().status in ['published', 'archived']
+        && incoming().author is string
+        && incoming().date is string;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /articles/{articleId} {
+      allow read: if true; // Public can read articles
+      // Only authenticated admins can write/update/delete. For POC, any authenticated user acts as admin
+      allow create: if isSignedIn() && isValidArticle();
+      allow update: if isSignedIn() && isValidArticle();
+      allow delete: if isSignedIn();
+    }
+  }
+}
