@@ -19,3 +19,4 @@ View your app in AI Studio: https://ai.studio/apps/7dfcab87-e5f4-43c2-8218-c46fa
 3. Run the app:
    `npm run dev`
 "# LINDA" 
+"# LINDA" 
