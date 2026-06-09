@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+Disallow: /become-a-writer
+
+# Allow all public content
+Allow: /
+Allow: /category/
+Allow: /article/
+
+# Sitemap — update with your production domain before deploying
+Sitemap: https://lensainsignia.com/sitemap.xml
+
+# Crawl-delay: 10

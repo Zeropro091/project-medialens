@@ -33,7 +33,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>("reader");
   const [quota, setQuota] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  // SSR safety: on the server there is never a session, so loading can be false immediately.
+  // On the client we start at true until onAuthStateChange resolves.
+  const [loading, setLoading] = useState(typeof window === 'undefined' ? false : true);
 
   const fetchProfile = async (uid: string) => {
     try {

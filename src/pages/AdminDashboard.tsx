@@ -40,10 +40,15 @@ const SAMPLE_ARTICLES = [
   }
 ];
 
+const PAGE_SIZE = 20;
+
 export default function AdminDashboard() {
   const { user, role, quota, loading: authLoading, logout, signInWithEmail, signUpWithEmail, refetchProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [articles, setArticles] = useState<any[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { refetch: refetchGlobalArticles } = useArticles();
   const location = useLocation();
 
@@ -97,7 +102,8 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('gallery')
-        .select('*');
+        .select('*')
+        .limit(100);
       if (error) throw error;
       const fetched = (data || []).map(item => ({
         url: item.url,
@@ -109,13 +115,68 @@ export default function AdminDashboard() {
     }
   };
 
-  const readFileAsDataURL = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.onerror = (e) => reject(e);
-      reader.readAsDataURL(file);
-    });
+  /**
+   * Upload a file to Supabase Storage (images bucket) and return the public URL.
+   * Falls back to a base64 data URL if Storage is unavailable (e.g., bucket not yet migrated).
+   */
+  const uploadFileToStorage = async (file: File): Promise<string> => {
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Try Supabase Storage first
+    try {
+      const { data, error } = await supabase.storage.from('images').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path);
+      return urlData.publicUrl;
+    } catch (storageError) {
+      console.warn('[Image Upload] Storage unavailable, falling back to base64:', storageError);
+      // Fallback: read the file as a base64 data URL
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read image file as base64'));
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  /**
+   * Insert an image markdown into the MDEditor content at cursor position.
+   * If the MDEditor textarea can't be found, appends at the end.
+   */
+  const insertImageIntoContent = (imgUrl: string, imgName: string) => {
+    const markdown = `\n\n![${imgName}](${imgUrl})\n\n`;
+    // Try to insert at cursor in the MDEditor's textarea
+    const textarea = document.querySelector('.w-md-editor-text-input') as HTMLTextAreaElement | null;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+
+      setEditingArticle(prev => ({
+        ...prev,
+        contentStr: before + markdown + after
+      }));
+
+      // Restore focus and cursor position after the inserted markdown
+      setTimeout(() => {
+        textarea.focus();
+        const newPos = start + markdown.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }, 50);
+    } else {
+      // Fallback: append at the end
+      setEditingArticle(prev => ({
+        ...prev,
+        contentStr: (prev.contentStr || '') + markdown
+      }));
+    }
   };
 
   const copyToClipboard = async (text: string) => {
@@ -145,7 +206,7 @@ export default function AdminDashboard() {
     try {
       setIsUploadingGallery(true);
       const uploadPromises = files.map(async (file) => {
-        const url = await readFileAsDataURL(file);
+        const url = await uploadFileToStorage(file);
         
         const { error } = await supabase
           .from('gallery')
@@ -187,7 +248,7 @@ export default function AdminDashboard() {
         setEditingArticle(prev => ({ ...prev, contentStr: before + uploadPlaceholder + after }));
         
         const uploadPromises = files.map(async (file) => {
-          const url = await readFileAsDataURL(file);
+          const url = await uploadFileToStorage(file);
           
           const { error } = await supabase
             .from('gallery')
@@ -243,15 +304,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handleImageUpload = async (file: File) => {
     if (!file) return;
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPEG, PNG, WebP, GIF, AVIF, or SVG).');
+      return;
+    }
+    // Validate file size (max 10MB)
+    if (file.size > MAX_IMAGE_SIZE) {
+      alert(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum allowed is 10MB.`);
+      return;
+    }
     try {
       setIsUploadingImage(true);
-      const url = await readFileAsDataURL(file);
-      setEditingArticle(prev => ({ ...prev, imageUrl: url }));
+      const url = await uploadFileToStorage(file);
+      setEditingArticle(prev => ({ ...prev, imageUrl: url, _imgError: false }));
     } catch (e: any) {
-      console.error('Error reading image', e);
-      alert(`Failed to handle image: ${e.message}`);
+      console.error('Error uploading image', e);
+      alert(`Failed to upload image: ${e.message}`);
     } finally {
       setIsUploadingImage(false);
       setIsDraggingImage(false);
@@ -274,28 +347,58 @@ export default function AdminDashboard() {
     }
   }, [user, role]);
 
+  /** Fetch initial page of articles (page 0). */
   const fetchArticles = async () => {
     try {
       setLoading(true);
-      let query = supabase.from('articles').select('*');
+      setPage(0);
+      const from = 0;
+      const to = PAGE_SIZE - 1;
+      let query = supabase
+        .from('articles')
+        .select('*')
+        .order('createdAt', { ascending: false, nullsFirst: false })
+        .range(from, to);
       if (role === 'poster') {
         query = query.eq('author_id', user?.id);
       }
       const { data, error } = await query;
       if (error) throw error;
-      const fetched = data || [];
-
-      fetched.sort((a: any, b: any) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      setArticles(fetched);
+      setArticles(data || []);
+      setHasMore((data?.length || 0) === PAGE_SIZE);
     } catch (e) {
       handleSupabaseError(e, OperationType.LIST, 'articles');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** Load the next page of articles and append to the existing list. */
+  const loadMoreArticles = async () => {
+    if (loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      const from = nextPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      let query = supabase
+        .from('articles')
+        .select('*')
+        .order('createdAt', { ascending: false, nullsFirst: false })
+        .range(from, to);
+      if (role === 'poster') {
+        query = query.eq('author_id', user?.id);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setArticles(prev => [...prev, ...(data || [])]);
+      setPage(nextPage);
+      setHasMore((data?.length || 0) === PAGE_SIZE);
+    } catch (e: any) {
+      console.error('Error loading more articles', e);
+      alert(`Failed to load more articles: ${e.message}`);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -428,8 +531,10 @@ export default function AdminDashboard() {
 
       // Build a clean payload with only known DB columns
       const contentStr = src.contentStr || (src.contentArr ? src.contentArr.join('\n\n') : '');
+      // Split by one or more blank lines (double-newline) to preserve paragraph boundaries.
+      // Using \n{2,} handles markdown where paragraphs are separated by blank lines.
       const contentArr = contentStr
-        ? contentStr.split('\n').filter((p: string) => p.trim() !== '')
+        ? contentStr.split(/\n{2,}/).filter((p: string) => p.trim() !== '')
         : src.contentArr || [];
 
       const basePayload: Record<string, any> = {
@@ -447,11 +552,13 @@ export default function AdminDashboard() {
         status:     src.status || 'published',
       };
 
+      const now = new Date().toISOString();
+
       if (src.id) {
         // UPDATE
         const { error } = await supabase
           .from('articles')
-          .update({ ...basePayload, updatedAt: new Date().toISOString() })
+          .update({ ...basePayload, updatedAt: now })
           .eq('id', src.id);
         if (error) throw error;
       } else {
@@ -465,7 +572,8 @@ export default function AdminDashboard() {
           .insert({
             ...basePayload,
             author_id: user?.id,
-            createdAt: new Date().toISOString(),
+            createdAt: now,
+            updatedAt: now,
             date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
             time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           });
@@ -743,6 +851,28 @@ export default function AdminDashboard() {
                   )}
                 </tbody>
               </table>
+              {/* Load More button */}
+              {hasMore && articles.length > 0 && (
+                <div className="flex justify-center py-4">
+                  <button
+                    onClick={loadMoreArticles}
+                    disabled={loadingMore}
+                    className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-sm rounded-lg transition-colors border border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={16} />
+                        Load More Articles
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -828,47 +958,85 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">Image URL or Upload</label>
+                <label className="block text-sm font-semibold mb-1">
+                  Article Image
+                  {editingArticle.imageUrl && (
+                    <span className="text-xs text-green-600 font-normal ml-2">✓ Selected</span>
+                  )}
+                </label>
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   <div className="md:col-span-8 flex flex-col justify-between">
-                    <div 
-                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors flex-1 flex flex-col justify-center ${isDraggingImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-                      onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-                      onDragLeave={(e) => { e.preventDefault(); setIsDraggingImage(false); }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDraggingImage(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file && file.type.startsWith('image/')) {
-                          handleImageUpload(file);
-                        }
-                      }}
-                    >
-                      {isUploadingImage ? (
-                        <div className="text-blue-500 font-semibold flex items-center justify-center space-x-2">
-                           <UploadCloud className="animate-bounce" /> <span>Uploading...</span>
+                    {/* Image Preview or Upload Area */}
+                    {editingArticle.imageUrl && !isUploadingImage ? (
+                      <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-gray-50 group">
+                        <img
+                          src={editingArticle.imageUrl}
+                          alt="Article image preview"
+                          className="w-full h-48 object-contain bg-gray-100"
+                          onError={() => setEditingArticle(prev => ({ ...prev, _imgError: true }))}
+                        />
+                        {editingArticle._imgError && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
+                            Image failed to load
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() => { fileInputRef.current?.click(); }}
+                            className="bg-white text-gray-800 px-3 py-1.5 rounded text-xs font-bold shadow-md hover:bg-gray-100 transition-colors border-0 cursor-pointer"
+                          >
+                            Change
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingArticle(prev => ({ ...prev, imageUrl: '', _imgError: false }))}
+                            className="bg-red-500 text-white px-3 py-1.5 rounded text-xs font-bold shadow-md hover:bg-red-600 transition-colors border-0 cursor-pointer"
+                          >
+                            Remove
+                          </button>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center space-y-2">
-                          <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            className="hidden" 
-                            accept="image/*" 
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleImageUpload(file);
-                            }} 
-                          />
-                          <UploadCloud className="text-gray-400" size={32} />
-                          <p className="text-sm text-gray-600">
-                            Drag and drop an image here, or{' '}
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-blue-600 hover:underline">browse</button>
-                          </p>
-                          <span className="text-xs text-gray-400">or paste a URL below</span>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors flex-1 flex flex-col justify-center ${isDraggingImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                        onDragLeave={(e) => { e.preventDefault(); setIsDraggingImage(false); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDraggingImage(false);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file && file.type.startsWith('image/')) {
+                            handleImageUpload(file);
+                          }
+                        }}
+                      >
+                        {isUploadingImage ? (
+                          <div className="text-blue-500 font-semibold flex items-center justify-center space-x-2">
+                             <UploadCloud className="animate-bounce" /> <span>Uploading...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center space-y-2">
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              accept="image/*" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImageUpload(file);
+                              }} 
+                            />
+                            <UploadCloud className="text-gray-400" size={32} />
+                            <p className="text-sm text-gray-600">
+                              Drag and drop an image here, or{' '}
+                              <button type="button" onClick={() => fileInputRef.current?.click()} className="text-blue-600 hover:underline">browse</button>
+                            </p>
+                            <span className="text-xs text-gray-400">or paste a URL below</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <input type="url" placeholder="https://..." className="w-full border p-2 rounded mt-2" value={editingArticle.imageUrl || ''} onChange={e => setEditingArticle({...editingArticle, imageUrl: e.target.value})} />
                   </div>
                   
@@ -885,12 +1053,27 @@ export default function AdminDashboard() {
                             key={i} 
                             onClick={() => setEditingArticle({...editingArticle, imageUrl: img.url})}
                             className={`relative border rounded cursor-pointer aspect-square overflow-hidden hover:border-blue-500 transition-colors group ${editingArticle.imageUrl === img.url ? 'border-blue-600 ring-2 ring-blue-100' : 'border-gray-200'}`}
-                            title={img.name}
+                            title={`${img.name} — Click to set as thumbnail, click + to insert into content`}
                           >
                             <img src={img.url} className="h-full w-full object-cover" />
+                            {/* Hover overlay: insert into content button */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  insertImageIntoContent(img.url, img.name);
+                                }}
+                                className="bg-white text-gray-900 rounded-full p-1.5 shadow-md hover:bg-blue-50 hover:text-blue-600 transition-colors border-0 cursor-pointer"
+                                title="Insert image into article content"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                            {/* Selected state indicator for thumbnail */}
                             {editingArticle.imageUrl === img.url && (
-                              <div className="absolute inset-0 bg-blue-600 bg-opacity-20 flex items-center justify-center">
-                                <span className="bg-blue-600 text-white rounded-full p-0.5"><CheckCircle size={14} /></span>
+                              <div className="absolute top-1 right-1 bg-blue-600 text-white rounded-full p-0.5 shadow-md">
+                                <CheckCircle size={12} />
                               </div>
                             )}
                           </div>
@@ -919,9 +1102,23 @@ export default function AdminDashboard() {
                 </div>
               </div>
               
-              <div className="pt-4 flex justify-end space-x-3">
+              <div className="pt-4 flex justify-end space-x-3 items-center">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase">Status</label>
+                  <select 
+                    className="border rounded p-1.5 text-sm bg-white"
+                    value={editingArticle.status || 'draft'}
+                    onChange={e => setEditingArticle({...editingArticle, status: e.target.value})}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
                 <button type="button" onClick={closeModal} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Article</button>
+                <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors">
+                  {loading ? 'Saving...' : 'Save Article'}
+                </button>
               </div>
             </form>
           </div>

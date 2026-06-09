@@ -7,17 +7,22 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 import { Search, Menu, ChevronRight, Mail, Share2, Twitter, Facebook, Linkedin, Link as LinkIcon, X, CheckCircle2, LogOut, Sparkles, Users, FileText, Activity, ShieldAlert, Award } from 'lucide-react';
-import AdminDashboard from './pages/AdminDashboard';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import BecomeWriterPage from './pages/BecomeWriterPage';
-import DashboardPage from './pages/DashboardPage';
+
+// Admin and auth pages are client-only — lazy load them so SSR never touches
+// their dependencies (MDEditor, etc.) which have ESM circular dep issues.
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('./pages/RegisterPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const BecomeWriterPage = React.lazy(() => import('./pages/BecomeWriterPage'));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
+
 import CategoryPage from './pages/CategoryPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { supabase } from './lib/supabase';
-import MDEditor from '@uiw/react-md-editor';
+import { getOrigin, getCurrentUrl } from './lib/ssrUtils';
 import { AuthProvider, useAuth } from './components/AuthProvider';
+import MarkdownRenderer from './components/MarkdownRenderer';
 
 // --- Global Context for Articles ---
 export const ArticleContext = React.createContext<{ articles: any[], loading: boolean, refetch: () => Promise<void> }>({
@@ -95,23 +100,33 @@ const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: st
 const SEO = ({ title, description, url, imageUrl, type = 'website', author, datePublished, schemaMarkup }: { title: string, description: string, url?: string, imageUrl?: string, type?: string, author?: string, datePublished?: string, schemaMarkup?: object }) => {
   const siteTitle = 'Lensa Insignia';
   const fullTitle = title === siteTitle ? title : `${title} | ${siteTitle}`;
+  const { pathname } = useLocation();
+
+  // Strip query strings from canonical URL to avoid duplicate content signals
+  // Prefer explicitly passed url, otherwise build from current pathname
+  const canonicalUrl = url
+    ? (() => { try { const u = new URL(url); return u.origin + u.pathname; } catch { return url; } })()
+    : getCurrentUrl(pathname);
   
   return (
     <Helmet>
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
       <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-      {url && <link rel="canonical" href={url} />}
+      <link rel="canonical" href={canonicalUrl} />
       
+      {/* Open Graph */}
+      <meta property="og:site_name" content="Lensa Insignia" />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content={type} />
-      {url && <meta property="og:url" content={url} />}
+      <meta property="og:url" content={canonicalUrl} />
       {imageUrl && <meta property="og:image" content={imageUrl} />}
       
       {type === 'article' && author && <meta property="article:author" content={author} />}
       {type === 'article' && datePublished && <meta property="article:published_time" content={datePublished} />}
 
+      {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
@@ -126,23 +141,29 @@ const SEO = ({ title, description, url, imageUrl, type = 'website', author, date
   );
 };
 
-// Scroll to top on route change
+// Scroll to top on route change — client-only, no-op on SSR
 const ScrollToTop = () => {
-  const { pathname, search } = useLocation();
+  const location = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname, search]);
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
   return null;
 };
 
 const Header = () => {
   const { user, role, logout } = useAuth();
-  const date = new Date().toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+  // Compute the date string lazily on the client only to avoid SSR/client mismatch.
+  // On the first render (which matches the SSR output) we use an empty string;
+  // after mount we update to the real formatted date string.
+  const [date, setDate] = useState('');
+  useEffect(() => {
+    setDate(new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }));
+  }, []);
   const [isVisible, setIsVisible] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -356,10 +377,10 @@ const Footer = () => {
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-gray-300">Sections</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><Link to="/?category=World" className="hover:text-white transition-colors">World News</Link></li>
-              <li><Link to="/?category=Politics" className="hover:text-white transition-colors">Politics</Link></li>
-              <li><Link to="/?category=Business" className="hover:text-white transition-colors">Business & Tech</Link></li>
-              <li><Link to="/?category=Science" className="hover:text-white transition-colors">Science & Health</Link></li>
+              <li><Link to="/category/world" className="hover:text-white transition-colors">World News</Link></li>
+              <li><Link to="/category/politics" className="hover:text-white transition-colors">Politics</Link></li>
+              <li><Link to="/category/business" className="hover:text-white transition-colors">Business & Tech</Link></li>
+              <li><Link to="/category/science" className="hover:text-white transition-colors">Science & Health</Link></li>
             </ul>
           </div>
           
@@ -541,17 +562,21 @@ const HomePage = () => {
     "@context": "https://schema.org",
     "@type": "NewsMediaOrganization",
     "name": "Lensa Insignia",
-    "url": window.location.origin,
+    "url": getOrigin(),
     "logo": {
       "@type": "ImageObject",
-      "url": `${window.location.origin}/logo.png`
+      "url": `${getOrigin()}/favicon.svg`,
+      "width": 64,
+      "height": 64
     },
-    "description": seoDescription
+    "description": seoDescription,
+    "foundingDate": "1924",
+    "sameAs": []
   };
 
   return (
     <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-      <SEO title={seoTitle} description={seoDescription} url={window.location.href} schemaMarkup={!isFiltering ? organizationSchema : undefined} />
+      <SEO title={seoTitle} description={seoDescription} schemaMarkup={!isFiltering ? organizationSchema : undefined} />
       <div className="w-full flex justify-center mb-8">
         <AdSlot width="728px" height="90px" className="hidden md:flex" />
         <AdSlot width="320px" height="50px" className="flex md:hidden" />
@@ -742,7 +767,8 @@ const ArticlePage = () => {
   }
 
   const handleShare = (platform: string) => {
-    const url = encodeURIComponent(window.location.href);
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : getCurrentUrl(`/article/${article?.id}`);
+    const url = encodeURIComponent(currentUrl);
     const title = encodeURIComponent(article.title);
     const excerpt = encodeURIComponent(article.excerpt);
     
@@ -755,7 +781,9 @@ const ArticlePage = () => {
     } else if (platform === 'linkedin') {
       shareUrl = `https://www.linkedin.com/shareArticle?mini=true&url=${url}&title=${title}&summary=${excerpt}&source=LensaInsignia`;
     } else if (platform === 'copy') {
-      navigator.clipboard.writeText(window.location.href);
+      if (typeof navigator !== 'undefined') {
+        navigator.clipboard.writeText(currentUrl);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       return;
@@ -772,31 +800,38 @@ const ArticlePage = () => {
         title={article.title} 
         description={article.excerpt} 
         type="article"
-        url={window.location.href}
         imageUrl={article.imageUrl}
         author={article.author}
-        datePublished={article.date}
+        datePublished={article.createdAt ? new Date(article.createdAt).toISOString() : undefined}
         schemaMarkup={{
           "@context": "https://schema.org",
           "@type": "NewsArticle",
           "headline": article.title,
-          "image": [article.imageUrl],
-          "datePublished": new Date(article.date).toISOString(),
-          "dateModified": new Date(article.date).toISOString(),
+          "image": article.imageUrl ? [article.imageUrl] : [],
+          "datePublished": article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString(),
+          "dateModified": article.updatedAt ? new Date(article.updatedAt).toISOString() : (article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString()),
           "author": [{
-              "@type": "Person",
-              "name": article.author,
-              "jobTitle": article.role
+            "@type": "Person",
+            "name": article.author,
+            "jobTitle": article.role
           }],
           "publisher": {
-              "@type": "Organization",
-              "name": "Lensa Insignia",
-              "logo": {
-                  "@type": "ImageObject",
-                  "url": `${window.location.origin}/logo.png`
-              }
+            "@type": "NewsMediaOrganization",
+            "name": "Lensa Insignia",
+            "url": getOrigin(),
+            "logo": {
+              "@type": "ImageObject",
+              "url": `${getOrigin()}/favicon.svg`,
+              "width": 64,
+              "height": 64
+            }
           },
-          "description": article.excerpt
+          "description": article.excerpt,
+          "articleSection": article.category,
+          "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": `${getOrigin()}/article/${article.id}`
+          }
         }}
       />
       <div className="w-full flex justify-center mb-8">
@@ -871,7 +906,7 @@ const ArticlePage = () => {
             </div>
 
             {article.contentStr ? (
-              <MDEditor.Markdown source={article.contentStr} />
+              <MarkdownRenderer source={article.contentStr} />
             ) : (
               // Fallback for old contentArr or mock data
               (() => {
@@ -941,9 +976,189 @@ const ArticlePage = () => {
 };
 
 const StaticPage = ({ title }: { title: string }) => {
+  const content: Record<string, { description: string; body: React.ReactNode }> = {
+    "Our Story": {
+      description: "Learn about Lensa Insignia — our history, mission, and commitment to unbiased journalism since 1924.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">F</span>ounded in 1924, Lensa Insignia began as a small regional newspaper with a single conviction: that informed citizens make better decisions. Nearly a century later, that conviction remains the core of everything we do.
+          </p>
+          <p className="mb-6">We are an independent news organization committed to factual, unbiased reporting. Our editorial decisions are made free from commercial or political influence. We hold ourselves to the highest standards of journalistic integrity, and we correct our mistakes publicly and promptly.</p>
+          <blockquote className="border-l-4 border-accent pl-6 py-2 my-8 text-2xl italic font-serif text-ink-light">
+            "The mission of journalism is to inform citizens, challenge power, and illuminate the truth — no matter how inconvenient."
+          </blockquote>
+          <p className="mb-6">Today, Lensa Insignia reaches readers across the globe covering World affairs, Politics, Business, Technology, Science, Health, Sports, Arts, and Opinion. Our newsroom is staffed by award-winning journalists, editors, and photojournalists who work tirelessly to bring you stories that matter.</p>
+          <p className="mb-6">We are funded through a combination of advertising, subscriptions, and grants from journalistic foundations. We do not accept funding from political parties, governments, or corporations with interests in our coverage areas.</p>
+        </>
+      )
+    },
+    "Careers": {
+      description: "Join the Lensa Insignia team. Explore open positions in journalism, technology, product, and operations.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">W</span>e are always looking for talented, curious, and driven people to join the Lensa Insignia team. Whether you are a seasoned journalist, a developer, or a product designer, we want to hear from you.
+          </p>
+          <p className="mb-6">At Lensa Insignia, you will work alongside some of the best minds in modern journalism and technology. We offer a collaborative, diverse, and remote-friendly work environment.</p>
+          <h2 className="text-2xl font-black mt-8 mb-4">Open Roles</h2>
+          <ul className="space-y-3 mb-6 list-disc pl-6">
+            <li>Senior Political Correspondent</li>
+            <li>Data Journalist</li>
+            <li>Full-Stack Engineer (React / Node.js)</li>
+            <li>UX Designer</li>
+            <li>Social Media Editor</li>
+          </ul>
+          <p className="mb-6">To apply, send your CV and a cover letter to <strong>careers@lensainsignia.com</strong>. Include the role title in your subject line.</p>
+        </>
+      )
+    },
+    "Journalistic Ethics": {
+      description: "Read the Lensa Insignia editorial standards, ethics policy, and commitment to accuracy, fairness, and transparency.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">E</span>thics are not optional in journalism — they are the foundation. At Lensa Insignia, every reporter, editor, and contributor is bound by the following principles.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Accuracy</h2>
+          <p className="mb-6">We verify facts before publishing. When we make mistakes, we correct them clearly and promptly with a correction notice appended to the original article.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Independence</h2>
+          <p className="mb-6">Our editorial decisions are made independently of advertisers, sponsors, and outside interests. We do not accept gifts, free travel, or any benefit from sources we cover.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Fairness</h2>
+          <p className="mb-6">We represent all sides of a story fairly. Subjects of criticism are given the opportunity to respond before publication.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Transparency</h2>
+          <p className="mb-6">We disclose conflicts of interest. We identify anonymous sources only when necessary for public interest reporting and after careful editorial review.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Corrections Policy</h2>
+          <p className="mb-6">Corrections are published at the top of the affected article and logged in our corrections archive. We do not silently alter published content.</p>
+          <p className="mb-6">To report an error or raise an ethics concern, contact <strong>ethics@lensainsignia.com</strong>.</p>
+        </>
+      )
+    },
+    "Contact Us": {
+      description: "Get in touch with the Lensa Insignia newsroom. Contact us for tips, press inquiries, corrections, or general questions.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">W</span>e welcome tips, story ideas, corrections, and feedback from our readers. Use the contacts below to reach the right team.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">News Tips</h2>
+          <p className="mb-6">Have a story we should investigate? Email us at <strong>tips@lensainsignia.com</strong>. For sensitive tips, consider using a secure channel such as Signal.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Press & Media Inquiries</h2>
+          <p className="mb-6">For interview requests and media inquiries, contact our communications team at <strong>press@lensainsignia.com</strong>.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Corrections</h2>
+          <p className="mb-6">To report a factual error, email <strong>corrections@lensainsignia.com</strong> with the article URL and the specific inaccuracy.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">General Enquiries</h2>
+          <p className="mb-6">For all other questions, reach us at <strong>hello@lensainsignia.com</strong>.</p>
+        </>
+      )
+    },
+    "Terms of Service": {
+      description: "Read the Lensa Insignia Terms of Service governing use of our website, content, and services.",
+      body: (
+        <>
+          <p className="text-sm text-ink-light mb-8">Last updated: January 1, 2025</p>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">B</span>y accessing or using the Lensa Insignia website and services, you agree to be bound by these Terms of Service. Please read them carefully.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Use of Content</h2>
+          <p className="mb-6">All content published on Lensa Insignia — including articles, photographs, graphics, and data — is the intellectual property of Lensa Insignia Media Group or its contributors. You may not reproduce, redistribute, or commercially exploit any content without prior written permission.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">User Accounts</h2>
+          <p className="mb-6">You are responsible for maintaining the security of your account credentials. Lensa Insignia is not liable for any loss or damage arising from unauthorized account access.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Prohibited Conduct</h2>
+          <p className="mb-6">You may not use our services to post illegal, harassing, defamatory, or misleading content. We reserve the right to terminate accounts that violate these terms.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Limitation of Liability</h2>
+          <p className="mb-6">Lensa Insignia is provided "as is" without warranties of any kind. We are not liable for any direct or indirect damages arising from your use of the site.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Changes to Terms</h2>
+          <p className="mb-6">We may update these Terms at any time. Continued use of the site after changes constitutes acceptance of the revised Terms.</p>
+          <p className="mb-6">Questions? Contact us at <strong>legal@lensainsignia.com</strong>.</p>
+        </>
+      )
+    },
+    "Privacy Policy": {
+      description: "Read the Lensa Insignia Privacy Policy. Learn how we collect, use, and protect your personal data.",
+      body: (
+        <>
+          <p className="text-sm text-ink-light mb-8">Last updated: January 1, 2025</p>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">Y</span>our privacy matters to us. This policy explains what personal data Lensa Insignia collects, why we collect it, and how we use and protect it.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Data We Collect</h2>
+          <p className="mb-6">We collect information you provide directly (such as your email address when you register or subscribe), as well as usage data collected automatically (such as pages visited and browser type) via analytics tools.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">How We Use Your Data</h2>
+          <p className="mb-6">We use your data to provide and improve our services, send newsletters you have opted into, and comply with legal obligations. We do not sell your personal data to third parties.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Cookies</h2>
+          <p className="mb-6">We use cookies for authentication, analytics, and advertising. You can manage cookie preferences in your browser settings. See our <Link to="/cookies" className="text-accent hover:underline">Cookie Policy</Link> for details.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Your Rights</h2>
+          <p className="mb-6">Depending on your location, you may have the right to access, correct, delete, or export your personal data. To exercise these rights, contact <strong>privacy@lensainsignia.com</strong>.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Data Retention</h2>
+          <p className="mb-6">We retain personal data for as long as your account is active or as required by law. You may request deletion of your account and associated data at any time.</p>
+        </>
+      )
+    },
+    "Cookie Policy": {
+      description: "Learn how Lensa Insignia uses cookies and similar technologies on our website.",
+      body: (
+        <>
+          <p className="text-sm text-ink-light mb-8">Last updated: January 1, 2025</p>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">C</span>ookies are small text files stored on your device when you visit a website. This policy explains how Lensa Insignia uses cookies and your choices regarding them.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Essential Cookies</h2>
+          <p className="mb-6">These cookies are required for the site to function — for example, to keep you logged in. You cannot opt out of essential cookies.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Analytics Cookies</h2>
+          <p className="mb-6">We use analytics tools to understand how readers use our site. This helps us improve content and user experience. Analytics data is aggregated and anonymized.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Advertising Cookies</h2>
+          <p className="mb-6">We display advertising on our site. Ad partners may set cookies to serve relevant ads based on your interests. You can opt out of interest-based advertising via your browser settings or through industry opt-out tools.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Managing Cookies</h2>
+          <p className="mb-6">You can control and delete cookies through your browser settings. Note that disabling cookies may affect the functionality of certain parts of the site.</p>
+        </>
+      )
+    },
+    "Accessibility": {
+      description: "Lensa Insignia's commitment to digital accessibility and how to report accessibility issues.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">L</span>ensa Insignia is committed to making our website accessible to all users, including those with disabilities. We work to conform to the Web Content Accessibility Guidelines (WCAG) 2.1 Level AA.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Our Commitment</h2>
+          <p className="mb-6">We continuously review our site for accessibility barriers and work to resolve them. This includes providing text alternatives for images, ensuring keyboard navigability, and maintaining sufficient color contrast.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Known Limitations</h2>
+          <p className="mb-6">Some third-party content embedded on our site (such as advertising or social media widgets) may not fully conform to accessibility standards. We work with our partners to improve this.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Reporting Issues</h2>
+          <p className="mb-6">If you experience an accessibility barrier on our site, please contact us at <strong>accessibility@lensainsignia.com</strong>. Include the URL of the page and a description of the issue. We aim to respond within 5 business days.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Alternative Formats</h2>
+          <p className="mb-6">If you require content in an alternative format, please contact us and we will do our best to accommodate your request.</p>
+        </>
+      )
+    },
+    "Newsletters": {
+      description: "Subscribe to Lensa Insignia newsletters. Get the top headlines and breaking news delivered to your inbox.",
+      body: (
+        <>
+          <p className="text-xl leading-relaxed mb-6">
+            <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">S</span>tay informed with Lensa Insignia newsletters. Choose the digest that fits your interests and have the most important stories delivered directly to your inbox.
+          </p>
+          <h2 className="text-2xl font-black mt-8 mb-3">The Morning Briefing</h2>
+          <p className="mb-6">Our flagship daily newsletter. The top 5 stories you need to know before 9am, curated by our editors. Sent every weekday morning.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Weekend Edition</h2>
+          <p className="mb-6">A longer read for your weekend. In-depth features, analysis, and the week's most important investigations — delivered every Saturday.</p>
+          <h2 className="text-2xl font-black mt-8 mb-3">Tech & Science Digest</h2>
+          <p className="mb-6">The latest developments in technology, science, and health. Sent every Tuesday and Thursday.</p>
+          <p className="mb-6">To subscribe, register for a free account and manage your newsletter preferences in your profile.</p>
+        </>
+      )
+    },
+  };
+
+  const page = content[title] ?? {
+    description: `Learn more about ${title} at Lensa Insignia.`,
+    body: <p className="text-xl text-ink-light">Content coming soon.</p>
+  };
+
   return (
     <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-      <SEO title={title} description={`Learn more about ${title} at Lensa Insignia.`} url={window.location.href} />
+      <SEO title={title} description={page.description} />
       <div className="w-full flex justify-center mb-8">
         <AdSlot width="728px" height="90px" className="hidden md:flex" />
         <AdSlot width="320px" height="50px" className="flex md:hidden" />
@@ -959,28 +1174,7 @@ const StaticPage = ({ title }: { title: string }) => {
           </header>
 
           <div className="prose prose-lg max-w-none font-serif text-ink leading-relaxed">
-            <p className="text-xl leading-relaxed mb-6">
-              <span className="float-left text-7xl font-black leading-none pr-3 pt-2 text-ink">L</span>orem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-            </p>
-            
-            <div className="my-10 flex justify-center float-right ml-8 mb-4">
-              <AdSlot width="300px" height="250px" />
-            </div>
-
-            <p className="mb-6">
-              Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-            </p>
-
-            <blockquote className="border-l-4 border-accent pl-6 py-2 my-8 text-2xl italic font-serif text-ink-light">
-              "Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem."
-            </blockquote>
-
-            <p className="mb-6">
-              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
-            </p>
-            <p className="mb-6">
-              Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?
-            </p>
+            {page.body}
           </div>
 
           <div className="w-full py-8 mt-8 border-t border-border flex justify-center">
@@ -994,17 +1188,18 @@ const StaticPage = ({ title }: { title: string }) => {
   );
 };
 
-function AppContent() {
+function AppContent({ initialArticles }: { initialArticles?: any[] }) {
   const { user, role, logout } = useAuth();
-  const [articles, setArticles] = useState<any[]>(ARTICLES);
-  const [loading, setLoading] = useState(true);
+  const [articles, setArticles] = useState<any[]>(initialArticles ?? ARTICLES);
+  const [loading, setLoading] = useState(initialArticles ? false : true);
   const [isBoardOpen, setIsBoardOpen] = useState(false);
 
   const fetchArticles = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('articles')
-        .select('*');
+        .select('*')
+        .limit(50);
       if (error) throw error;
       const fetched = data || [];
       
@@ -1017,7 +1212,7 @@ function AppContent() {
 
       if (fetched.length > 0) {
         // Only show published articles to users
-        const publishedArticles = fetched.filter((a: any) => a.status !== 'archived');
+        const publishedArticles = fetched.filter((a: any) => a.status === 'published');
         setArticles(publishedArticles.length > 0 ? publishedArticles : fetched);
       } else {
         setArticles(ARTICLES);
@@ -1030,15 +1225,25 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    // If the server already provided initialArticles (SSR hydration), skip the
+    // initial fetch to avoid a data-change immediately after mount that would
+    // cause content differences between server HTML and the first client render.
+    // The refetch() function on ArticleContext can still be called explicitly.
+    if (initialArticles && initialArticles.length > 0) return;
     fetchArticles();
-  }, [fetchArticles]);
+  }, [fetchArticles, initialArticles]);
 
   return (
     <ArticleContext.Provider value={{ articles, loading, refetch: fetchArticles }}>
-      <Router>
+      <>
         <ScrollToTop />
         <div className="min-h-screen flex flex-col relative">
           <Header />
+          <React.Suspense fallback={
+            <main className="flex-1 flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-black"></div>
+            </main>
+          }>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/article/:id" element={<ArticlePage />} />
@@ -1075,6 +1280,7 @@ function AppContent() {
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </React.Suspense>
           <Footer />
 
           {/* Floating Spark Button & Board Panel for Admin / Dev */}
@@ -1215,17 +1421,28 @@ function AppContent() {
             </>
           )}
         </div>
-      </Router>
+      </>
     </ArticleContext.Provider>
   );
 }
 
-export default function App() {
+export default function App({ initialArticles }: { initialArticles?: any[] } = {}) {
   return (
     <HelmetProvider>
       <AuthProvider>
-        <AppContent />
+        <Router>
+          <AppContent initialArticles={initialArticles} />
+        </Router>
       </AuthProvider>
     </HelmetProvider>
   );
+}
+
+/**
+ * AppSSR — used by the server entry (entry-server.tsx).
+ * StaticRouter, HelmetProvider, and AuthProvider are provided externally,
+ * so this just renders the article context + content routes.
+ */
+export function AppSSR({ initialArticles }: { initialArticles?: any[] }) {
+  return <AppContent initialArticles={initialArticles} />;
 }

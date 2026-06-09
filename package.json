@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:ssr": "node --import tsx/esm server.ts",
     "build": "vite build",
+    "build:ssr": "vite build --outDir dist/client && vite build --ssr src/entry-server.tsx --outDir dist/server",
+    "serve": "NODE_ENV=production node --import tsx/esm server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -16,6 +19,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@uiw/react-md-editor": "^4.1.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "compression": "^1.8.1",
     "date-fns": "^4.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -30,9 +34,11 @@
     "react-helmet-async": "^3.0.0",
     "react-quill": "^2.0.0",
     "react-router-dom": "^7.14.1",
+    "sirv": "^3.0.2",
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
