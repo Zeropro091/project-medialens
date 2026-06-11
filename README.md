@@ -19,6 +19,34 @@ LIN adalah platform pengelolaan konten artikel berbasis SEO yang dirancang untuk
 - **Backend/Database:** Supabase (PostgreSQL), Firebase (Auth).
 - **Lainnya:** MDX Remote, React Quill, PDF.js, Mammoth (Docx parser).
 
+## 📂 Dokumentasi & Tutorial (Pusat Informasi)
+
+Untuk memudahkan pemahaman dan pengelolaan proyek ini, silakan merujuk ke dokumen-dokumen berikut:
+
+### 1. [Panduan Migrasi & Setup Server](MIGRATION_GUIDE.md)
+*Panduan teknis langkah-demi-langkah untuk melakukan setup aplikasi di server produksi (VPS/Dedicated).*
+- Persyaratan sistem (Node.js, Postgres).
+- Konfigurasi environment.
+- Langkah deployment SSR.
+
+### 2. [Struktur Proyek & Workflow](STRUCTURE.md)
+*Penjelasan mendalam tentang arsitektur kode dan alur kerja teknis.*
+- Peta direktori.
+- Alur kerja SSR (Server-Side Rendering).
+- Workflow autentikasi hybrid & lifecycle data artikel.
+
+### 3. [Checklist Deployment](CHECKLIST.md)
+*Daftar centang khusus untuk System Administrator agar tidak ada langkah yang terlewat saat "Go Live".*
+- Verifikasi database & RLS.
+- Konfigurasi Nginx & SSL.
+- Manajemen proses PM2.
+
+### 4. [Instruksi AI Agent](AGENTS.md)
+*Panduan khusus jika Anda menggunakan AI (Cursor, Claude, Windsurf) untuk membantu coding.*
+- Aturan keselamatan SSR (Anti-crash).
+- Protokol database SQL-First.
+- Tips troubleshooting error umum.
+
 ## 🏃 Memulai (Getting Started)
 
 ### Prasyarat
@@ -35,12 +63,7 @@ LIN adalah platform pengelolaan konten artikel berbasis SEO yang dirancang untuk
    ```bash
    cp .env.example .env
    ```
-4. Isi variabel lingkungan berikut:
-   ```env
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   VITE_FIREBASE_CONFIG={"apiKey":"...","authDomain":"..."}
-   ```
+4. Isi variabel lingkungan sesuai panduan di [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md).
 
 ### Menjalankan di Mode Pengembangan (Development)
 - **Standard Vite Dev:**
@@ -62,16 +85,12 @@ LIN adalah platform pengelolaan konten artikel berbasis SEO yang dirancang untuk
    npm run serve
    ```
 
-## 📂 Struktur Proyek
+## 📂 Struktur Utama
 - `src/components`: Komponen UI yang reusable.
 - `src/lib`: Konfigurasi library (Supabase, Firebase, SSR Utils).
 - `src/pages`: Halaman utama aplikasi.
 - `supabase/migrations`: File SQL untuk skema database.
 - `server.ts`: Entry point untuk Express SSR server.
-
-## 📖 Dokumentasi Terkait
-- [Panduan Migrasi & Setup Server](MIGRATION_GUIDE.md)
-- [Requirement Phase 1 (SEO System)](.kiro/specs/phase1-seo-core-article-system/requirements.md)
 
 ---
 Developed with ❤️ by the LIN Team.
