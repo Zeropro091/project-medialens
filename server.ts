@@ -37,6 +37,17 @@ async function createServer() {
     app.use(sirv(path.resolve(__dirname, 'dist/client'), { extensions: [] }));
   }
 
+  /** Robust XML escaping for sitemaps */
+  function xmlEscape(str: string): string {
+    return str.replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&apos;'
+    }[m] || m));
+  }
+
   /** Build a minimal sitemap with static pages only (fallback when DB is unavailable). */
   function buildStaticSitemap(): string {
     const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
@@ -85,12 +96,7 @@ async function createServer() {
       if (articles && articles.length > 0) {
         for (const article of articles) {
           const pubDate = article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString();
-          const escapedTitle = (article.title || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&apos;');
+          const escapedTitle = xmlEscape(article.title || '');
 
           xml += `  <url>\n`;
           xml += `    <loc>${siteUrl}/article/${article.id}</loc>\n`;
@@ -174,6 +180,19 @@ async function createServer() {
   app.use('*', async (req, res) => {
     const url = req.originalUrl;
 
+    // --- Simple 404 Detection Logic ---
+    const CATEGORIES = ['world','politics','business','tech','science','health','sports','arts','opinion'];
+    const staticPages = ['about','careers','ethics','contact','terms','privacy','cookies','accessibility','newsletters'];
+    const authPages = ['login','register','profile','become-writer','dashboard','admin'];
+    
+    const isRoot = url === '/';
+    const isCategory = url.startsWith('/category/') && CATEGORIES.includes(url.split('/')[2]);
+    const isArticle = url.startsWith('/article/'); // Dynamic, assume valid pattern for now
+    const isStatic = staticPages.includes(url.slice(1));
+    const isAuth = authPages.includes(url.slice(1));
+
+    const isValidRoute = isRoot || isCategory || isArticle || isStatic || isAuth;
+
     try {
       let template: string;
       let render: (url: string) => Promise<{ html: string; helmetContext: any; initialData: string }>;
@@ -213,7 +232,8 @@ async function createServer() {
           .replace('</head>', `  ${initialDataScript}\n  </head>`);
       }
 
-      res.status(200).set({ 'Content-Type': 'text/html' }).end(finalHtml);
+      // Return 404 status if the route is invalid
+      res.status(isValidRoute ? 200 : 404).set({ 'Content-Type': 'text/html' }).end(finalHtml);
     } catch (e: any) {
       if (!isProduction) vite?.ssrFixStacktrace(e);
       console.error(e.stack);
