@@ -15,24 +15,35 @@ async function fetchArticlesSSR(): Promise<any[]> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 
-  if (!supabaseUrl || !supabaseKey) return [];
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('[SSR] Supabase credentials missing, skipping fetch.');
+    return [];
+  }
 
   try {
     const client = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await client
-      .from('articles')
-      .select('*')
-      .eq('status', 'published')
-      .order('createdAt', { ascending: false })
-      .limit(50);
+    
+    // Create a timeout promise
+    const timeout = new Promise<any[]>((_, reject) => 
+      setTimeout(() => reject(new Error('Fetch timeout')), 5000)
+    );
 
-    if (error) {
-      console.error('[SSR] Supabase fetch error:', error.message);
-      return [];
-    }
-    return data || [];
-  } catch (e) {
-    console.error('[SSR] Failed to fetch articles:', e);
+    const fetchData = async () => {
+      const { data, error } = await client
+        .from('articles')
+        .select('*')
+        .eq('status', 'published')
+        .order('createdAt', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data || [];
+    };
+
+    // Race the fetch against the 5s timeout
+    return await Promise.race([fetchData(), timeout]);
+  } catch (e: any) {
+    console.error('[SSR] Failed to fetch articles:', e.message || e);
     return [];
   }
 }

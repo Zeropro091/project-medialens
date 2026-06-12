@@ -179,6 +179,8 @@ async function createServer() {
   // Catch-all: SSR render for every HTML request
   app.use('*', async (req, res) => {
     const url = req.originalUrl;
+    const start = Date.now();
+    console.log(`[SSR] Starting render for: ${url}`);
 
     // --- Simple 404 Detection Logic ---
     const CATEGORIES = ['world','politics','business','tech','science','health','sports','arts','opinion'];
@@ -206,7 +208,9 @@ async function createServer() {
         render = (await import(path.resolve(__dirname, 'dist/server/entry-server.js'))).render;
       }
 
+      console.log(`[SSR] Template & Render module ready: ${Date.now() - start}ms`);
       const { html: appHtml, helmetContext, initialData } = await render(url);
+      console.log(`[SSR] RenderToString complete: ${Date.now() - start}ms`);
 
       // Build the inline script that seeds client-side state with SSR data
       const initialDataScript = `<script>window.__INITIAL_ARTICLES__ = ${initialData};</script>`;
@@ -232,6 +236,8 @@ async function createServer() {
           .replace('</head>', `  ${initialDataScript}\n  </head>`);
       }
 
+      const duration = Date.now() - start;
+      console.log(`[SSR] Total render time: ${duration}ms`);
       // Return 404 status if the route is invalid
       res.status(isValidRoute ? 200 : 404).set({ 'Content-Type': 'text/html' }).end(finalHtml);
     } catch (e: any) {
