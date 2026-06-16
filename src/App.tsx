@@ -86,6 +86,8 @@ const ARTICLES: any[] = [
 let sponsorsCache: { data: any[]; expiry: number } | null = null;
 const CACHE_TTL = 30000; // 30 seconds
 let inFlightPromise: Promise<any[]> | null = null;
+// Unique counter per AdSlot instance so each slot picks a different sponsor to display.
+let nextSlotId = 0;
 
 const fetchActiveSponsors = async (): Promise<any[]> => {
   // Return cached data if still fresh
@@ -128,6 +130,7 @@ const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: st
   const [shouldShow, setShouldShow] = useState(false);
   const [loading, setLoading] = useState(true);
   const cycleRef = useRef<NodeJS.Timeout | null>(null);
+  const slotIdRef = useRef(nextSlotId++); // unique per instance — drives index distribution
 
   useEffect(() => {
     let cancelled = false;
@@ -135,10 +138,16 @@ const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: st
       const fetched = await fetchActiveSponsors();
       if (cancelled) return;
       setSponsors(fetched);
-      // Frequency gate: use the FIRST sponsor's frequency for the overall decision
-      // (frequency controls how often ad slots appear on page load)
-      const freq = fetched.length > 0 ? (fetched[0].frequency ?? 1) : 1;
-      setShouldShow(fetched.length > 0 && Math.random() < (1 / freq));
+      // Distribute starting positions so slots don't all show the same sponsor
+      if (fetched.length > 0) {
+        const startIndex = slotIdRef.current % fetched.length;
+        setCurrentIndex(startIndex);
+        // Use this specific sponsor's frequency for the visibility gate
+        const sponsor = fetched[startIndex];
+        setShouldShow(Math.random() < (1 / (sponsor.frequency ?? 1)));
+      } else {
+        setShouldShow(false);
+      }
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -149,7 +158,11 @@ const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: st
     if (sponsors.length <= 1) return;
     const duration = (sponsors[currentIndex]?.duration_seconds ?? 10) * 1000;
     cycleRef.current = setTimeout(() => {
-      setCurrentIndex(prev => (prev + 1) % sponsors.length);
+      const nextIndex = (currentIndex + 1) % sponsors.length;
+      setCurrentIndex(nextIndex);
+      // Re-evaluate frequency gate for the next sponsor in the rotation
+      const nextSponsor = sponsors[nextIndex];
+      setShouldShow(Math.random() < (1 / (nextSponsor.frequency ?? 1)));
     }, duration);
     return () => {
       if (cycleRef.current) clearTimeout(cycleRef.current);
