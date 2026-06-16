@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase, handleSupabaseError, OperationType } from '../lib/supabase';
 import { useArticles } from '../App';
-import { LogOut, Plus, Edit2, Trash2, Archive, CheckCircle, Database, X, UploadCloud, Mail, Sparkles, ShieldAlert } from 'lucide-react';
+import { LogOut, Plus, Edit2, Trash2, Archive, CheckCircle, Database, X, UploadCloud, Mail, Sparkles, ShieldAlert, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import { useAuth } from '../components/AuthProvider';
 
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerRole, setRegisterRole] = useState<'user' | 'poster'>('user');
-  const [activeTab, setActiveTab] = useState<'articles' | 'users'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'users' | 'ads'>('articles');
   const [profiles, setProfiles] = useState<any[]>([]);
 
   const fetchProfiles = async () => {
@@ -329,11 +329,9 @@ export default function AdminDashboard() {
       setIsUploadingImage(false);
       setIsDraggingImage(false);
     }
-  };
-
-  useEffect(() => {
+  };    useEffect(() => {
     if (location.state?.tab) {
-      setActiveTab(location.state.tab as 'articles' | 'users');
+      setActiveTab(location.state.tab as 'articles' | 'users' | 'ads');
     }
   }, [location]);
 
@@ -762,6 +760,14 @@ export default function AdminDashboard() {
               User Management
             </button>
           )}
+          {role === 'dev' && (
+            <button 
+              className={`pb-2 px-2 font-bold ${activeTab === 'ads' ? 'border-b-2 border-black text-black' : 'text-gray-400'}`}
+              onClick={() => setActiveTab('ads')}
+            >
+              Ad Management
+            </button>
+          )}
         </div>
 
         {role === 'poster' && (
@@ -875,7 +881,7 @@ export default function AdminDashboard() {
               )}
             </div>
           </>
-        ) : (
+        ) : activeTab === 'users' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -920,6 +926,9 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
+        ) : (
+          /* Ad Management Tab — dev only */
+          <AdManagementTab />
         )}
       </div>
       
@@ -1040,8 +1049,58 @@ export default function AdminDashboard() {
                     <input type="url" placeholder="https://..." className="w-full border p-2 rounded mt-2" value={editingArticle.imageUrl || ''} onChange={e => setEditingArticle({...editingArticle, imageUrl: e.target.value})} />
                   </div>
                   
-                  <div className="md:col-span-4 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4 border-gray-200 flex flex-col max-h-[200px]">
-                    <span className="block text-xs font-semibold mb-2 text-gray-500 uppercase tracking-wider">Pick from Gallery</span>
+                  <div className="md:col-span-4 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4 border-gray-200 flex flex-col max-h-[340px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Image Gallery</span>
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors bg-transparent border-0 cursor-pointer flex items-center gap-1"
+                      >
+                        <UploadCloud size={12} />
+                        Upload
+                      </button>
+                    </div>
+
+                    {/* Drop zone for uploading images to gallery */}
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-2 text-center transition-all mb-2 ${isDraggingGallery ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingGallery(true); }}
+                      onDragLeave={(e) => { e.preventDefault(); setIsDraggingGallery(false); }}
+                      onDrop={(e: React.DragEvent<HTMLDivElement>) => {
+                        e.preventDefault();
+                        setIsDraggingGallery(false);
+                        const dtFiles = Array.from(e.dataTransfer.files || []) as File[];
+                        const files = dtFiles.filter((f: File) => f.type.startsWith('image/'));
+                        if (files.length > 0) {
+                          handleBatchGalleryUpload(files);
+                        }
+                      }}
+                    >
+                      {isUploadingGallery ? (
+                        <div className="text-green-600 font-semibold text-xs flex items-center justify-center gap-1.5">
+                          <UploadCloud size={14} className="animate-bounce" />
+                          Uploading {galleryInputRef.current?.files?.length || ''} images...
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
+                          <UploadCloud size={14} />
+                          <span>Drop images here to upload to gallery</span>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      ref={galleryInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      multiple
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const files = Array.from(e.target.files || []) as File[];
+                        if (files.length > 0) handleBatchGalleryUpload(files);
+                      }}
+                    />
+
                     <div className="overflow-y-auto grid grid-cols-2 gap-2 flex-1 pr-1" style={{ contentVisibility: 'auto' }}>
                       {galleryImages.length === 0 ? (
                         <div className="col-span-2 text-center text-xs text-gray-400 py-8">
@@ -1049,13 +1108,18 @@ export default function AdminDashboard() {
                         </div>
                       ) : (
                         galleryImages.map((img, i) => (
-                          <div 
-                            key={i} 
+                          <div
+                            key={i}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('application/x-gallery-image', JSON.stringify(img));
+                              e.dataTransfer.effectAllowed = 'copy';
+                            }}
                             onClick={() => setEditingArticle({...editingArticle, imageUrl: img.url})}
-                            className={`relative border rounded cursor-pointer aspect-square overflow-hidden hover:border-blue-500 transition-colors group ${editingArticle.imageUrl === img.url ? 'border-blue-600 ring-2 ring-blue-100' : 'border-gray-200'}`}
-                            title={`${img.name} — Click to set as thumbnail, click + to insert into content`}
+                            className={`relative border rounded cursor-grab active:cursor-grabbing aspect-square overflow-hidden hover:border-blue-500 transition-colors group ${editingArticle.imageUrl === img.url ? 'border-blue-600 ring-2 ring-blue-100' : 'border-gray-200'}`}
+                            title={`${img.name} — Click to set as thumbnail, drag into content, or click + to insert`}
                           >
-                            <img src={img.url} className="h-full w-full object-cover" />
+                            <img src={img.url} className="h-full w-full object-cover" draggable={false} />
                             {/* Hover overlay: insert into content button */}
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                               <button
@@ -1076,6 +1140,10 @@ export default function AdminDashboard() {
                                 <CheckCircle size={12} />
                               </div>
                             )}
+                            {/* Drag hint on hover */}
+                            <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                              Drag to insert
+                            </div>
                           </div>
                         ))
                       )}
@@ -1097,6 +1165,7 @@ export default function AdminDashboard() {
                   <MDEditor
                     value={editingArticle.contentStr || (editingArticle.contentArr ? editingArticle.contentArr.join('\n\n') : '')}
                     onChange={(val) => setEditingArticle({...editingArticle, contentStr: val || ''})}
+                    onDrop={handleTextareaDrop}
                     height={400}
                   />
                 </div>
@@ -1124,6 +1193,470 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ad Management Tab — dev only
+// ---------------------------------------------------------------------------
+function AdManagementTab() {
+  const { user, role } = useAuth();
+  const [sponsors, setSponsors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    image_url: '',
+    target_url: '',
+    duration_seconds: 10,
+    frequency: 1,
+    is_active: false,
+  });
+  const [isUploadingSponsorImage, setIsUploadingSponsorImage] = useState(false);
+  const [isDraggingSponsorImage, setIsDraggingSponsorImage] = useState(false);
+  const sponsorImageInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchSponsors = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('ad_sponsors')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setSponsors(data || []);
+    } catch (e: any) {
+      console.error('Error fetching ad sponsors', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (role === 'dev') fetchSponsors();
+  }, [role]);
+
+  const resetForm = () => {
+    setForm({ name: '', image_url: '', target_url: '', duration_seconds: 10, frequency: 1, is_active: false });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const openEdit = (sp: any) => {
+    setForm({
+      name: sp.name || '',
+      image_url: sp.image_url || '',
+      target_url: sp.target_url || '',
+      duration_seconds: sp.duration_seconds ?? 10,
+      frequency: sp.frequency ?? 1,
+      is_active: sp.is_active ?? false,
+    });
+    setEditingId(sp.id);
+    setShowForm(true);
+  };
+
+  const handleSaveSponsor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      alert('Sponsor name is required.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const payload = {
+        name: form.name.trim(),
+        image_url: form.image_url || '',
+        target_url: form.target_url || '',
+        duration_seconds: form.duration_seconds,
+        frequency: form.frequency,
+        is_active: form.is_active,
+        created_by: user?.id,
+      };
+
+      if (editingId) {
+        const { error } = await supabase
+          .from('ad_sponsors')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('ad_sponsors')
+          .insert(payload);
+        if (error) throw error;
+      }
+
+      resetForm();
+      fetchSponsors();
+    } catch (e: any) {
+      console.error('Error saving sponsor', e);
+      alert(`Failed to save sponsor: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleActive = async (sp: any) => {
+    try {
+      const { error } = await supabase
+        .from('ad_sponsors')
+        .update({ is_active: !sp.is_active, updated_at: new Date().toISOString() })
+        .eq('id', sp.id);
+      if (error) throw error;
+      fetchSponsors();
+    } catch (e: any) {
+      console.error('Error toggling sponsor', e);
+    }
+  };
+
+  /** Upload a sponsor image to storage and return the public URL */
+  const uploadSponsorImage = async (file: File): Promise<string> => {
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const path = `sponsors/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    try {
+      const { data, error } = await supabase.storage.from('images').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path);
+      return urlData.publicUrl;
+    } catch (storageError) {
+      console.warn('[Sponsor Image] Storage unavailable, falling back to base64:', storageError);
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read image file as base64'));
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleSponsorImageFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPEG, PNG, WebP, GIF, AVIF, or SVG).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum allowed is 10MB.`);
+      return;
+    }
+    try {
+      setIsUploadingSponsorImage(true);
+      const url = await uploadSponsorImage(file);
+      setForm(prev => ({ ...prev, image_url: url }));
+    } catch (e: any) {
+      console.error('Error uploading sponsor image', e);
+      alert(`Failed to upload image: ${e.message}`);
+    } finally {
+      setIsUploadingSponsorImage(false);
+      setIsDraggingSponsorImage(false);
+    }
+  };
+
+  const handleDeleteSponsor = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this sponsor? This cannot be undone.')) return;
+    try {
+      const { error } = await supabase
+        .from('ad_sponsors')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      fetchSponsors();
+    } catch (e: any) {
+      console.error('Error deleting sponsor', e);
+      alert(`Failed to delete sponsor: ${e.message}`);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h2 className="text-xl font-bold">Ad Sponsor Management</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Manage approved sponsors. Only active sponsors with is_active ✓ will appear on the public site.
+            Set duration (seconds) and frequency (every Nth page load) per sponsor.
+          </p>
+        </div>
+        <button
+          onClick={() => { resetForm(); setShowForm(true); }}
+          className="flex items-center space-x-2 bg-black text-white hover:bg-gray-800 px-4 py-2 rounded text-sm transition cursor-pointer border-0"
+        >
+          <Plus size={16} />
+          <span>Add Sponsor</span>
+        </button>
+      </div>
+
+      {/* Add / Edit Form */}
+      {showForm && (
+        <div className="mb-6 p-4 border border-gray-300 rounded-lg bg-gray-50">
+          <h3 className="font-bold text-sm mb-3">{editingId ? 'Edit Sponsor' : 'New Sponsor'}</h3>
+          <form onSubmit={handleSaveSponsor} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Sponsor Name *</label>
+              <input
+                required
+                type="text"
+                className="w-full border p-2 rounded text-sm"
+                placeholder="ACME Corp"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="md:col-span-2 lg:col-span-1">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Sponsor Image</label>
+              
+              {/* Upload drop zone */}
+              {form.image_url && !isUploadingSponsorImage ? (
+                <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-white group h-[100px]">
+                  <img
+                    src={form.image_url}
+                    alt="Sponsor banner preview"
+                    className="w-full h-full object-contain bg-gray-50"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => sponsorImageInputRef.current?.click()}
+                      className="bg-white text-gray-800 px-2.5 py-1 rounded text-[10px] font-bold shadow-md hover:bg-gray-100 transition-colors border-0 cursor-pointer"
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}
+                      className="bg-red-500 text-white px-2.5 py-1 rounded text-[10px] font-bold shadow-md hover:bg-red-600 transition-colors border-0 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`border-2 border-dashed rounded-lg h-[100px] flex flex-col items-center justify-center text-center transition-colors cursor-pointer ${
+                    isDraggingSponsorImage
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-300 hover:border-gray-400 bg-white'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setIsDraggingSponsorImage(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setIsDraggingSponsorImage(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingSponsorImage(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleSponsorImageFile(file);
+                  }}
+                  onClick={() => sponsorImageInputRef.current?.click()}
+                >
+                  <input
+                    type="file"
+                    ref={sponsorImageInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleSponsorImageFile(file);
+                    }}
+                  />
+                  {isUploadingSponsorImage ? (
+                    <div className="flex items-center gap-1.5 text-green-600 text-xs font-semibold">
+                      <UploadCloud size={16} className="animate-bounce" />
+                      Uploading...
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 px-2">
+                      <UploadCloud size={20} className="text-gray-400" />
+                      <span className="text-[10px] text-gray-500 leading-tight">
+                        Drop image or <span className="text-blue-600 font-semibold">browse</span>
+                      </span>
+                      {form.image_url && (
+                        <span className="text-[9px] text-green-600 font-medium">URL set ✓</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Show the URL value underneath for reference */}
+              {form.image_url && (
+                <input
+                  type="url"
+                  className="w-full border p-1.5 rounded text-[10px] mt-1 text-gray-500"
+                  placeholder="https://..."
+                  value={form.image_url}
+                  onChange={e => setForm({ ...form, image_url: e.target.value })}
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Target URL (click-through)</label>
+              <input
+                type="url"
+                className="w-full border p-2 rounded text-sm"
+                placeholder="https://example.com"
+                value={form.target_url}
+                onChange={e => setForm({ ...form, target_url: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Duration (seconds)</label>
+              <input
+                type="number"
+                min={3}
+                max={120}
+                className="w-full border p-2 rounded text-sm"
+                value={form.duration_seconds}
+                onChange={e => setForm({ ...form, duration_seconds: parseInt(e.target.value) || 10 })}
+              />
+              <span className="text-[10px] text-gray-400">How long this ad shows before rotating (3–120s)</span>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Frequency (every N page loads)</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className="w-full border p-2 rounded text-sm"
+                value={form.frequency}
+                onChange={e => setForm({ ...form, frequency: parseInt(e.target.value) || 1 })}
+              />
+              <span className="text-[10px] text-gray-400">1 = show on every page load, 5 = show every 5th load</span>
+            </div>
+            <div className="flex items-end gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_active}
+                  onChange={e => setForm({ ...form, is_active: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="text-xs font-semibold text-gray-600">Active (approved)</span>
+              </label>
+            </div>
+            <div className="flex items-end gap-2 md:col-span-2 lg:col-span-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold hover:bg-blue-700 transition disabled:bg-blue-300 border-0 cursor-pointer"
+              >
+                {loading ? 'Saving...' : editingId ? 'Update Sponsor' : 'Create Sponsor'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-4 py-2 border rounded text-sm hover:bg-gray-100 transition cursor-pointer bg-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Sponsor list */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="p-3 text-sm font-semibold">Sponsor</th>
+              <th className="p-3 text-sm font-semibold">Status</th>
+              <th className="p-3 text-sm font-semibold">Duration</th>
+              <th className="p-3 text-sm font-semibold">Frequency</th>
+              <th className="p-3 text-sm font-semibold">Target URL</th>
+              <th className="p-3 text-sm font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sponsors.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-gray-500 font-medium">
+                  No sponsors yet. Click "Add Sponsor" to create one.
+                </td>
+              </tr>
+            ) : (
+              sponsors.map(sp => (
+                <tr key={sp.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3">
+                    <div className="flex items-center gap-3">
+                      {sp.image_url ? (
+                        <img
+                          src={sp.image_url}
+                          alt={sp.name}
+                          className="w-10 h-10 object-contain rounded border bg-white"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 font-bold">
+                          {sp.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="font-bold text-sm">{sp.name}</div>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <button
+                      onClick={() => handleToggleActive(sp)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition border-0 cursor-pointer ${
+                        sp.is_active
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {sp.is_active ? <Eye size={12} /> : <EyeOff size={12} />}
+                      {sp.is_active ? 'Active' : 'Inactive'}
+                    </button>
+                  </td>
+                  <td className="p-3 text-sm">
+                    <span className="font-mono font-bold">{sp.duration_seconds ?? 10}s</span>
+                    <span className="text-xs text-gray-400 ml-1">per ad</span>
+                  </td>
+                  <td className="p-3 text-sm">
+                    <span className="font-mono font-bold">1:{sp.frequency ?? 1}</span>
+                    <span className="text-xs text-gray-400 ml-1">pages</span>
+                  </td>
+                  <td className="p-3 text-sm max-w-[200px] truncate">
+                    {sp.target_url ? (
+                      <a
+                        href={sp.target_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline flex items-center gap-1 text-xs"
+                      >
+                        {sp.target_url}
+                        <ExternalLink size={10} />
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => openEdit(sp)}
+                        className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 cursor-pointer border-0"
+                        title="Edit sponsor"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSponsor(sp.id)}
+                        className="p-1.5 bg-red-100 text-red-650 rounded hover:bg-red-200 cursor-pointer border-0"
+                        title="Delete sponsor"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

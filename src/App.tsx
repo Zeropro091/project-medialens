@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // src/App.tsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 import { Search, Menu, ChevronRight, Mail, Share2, Twitter, Facebook, Linkedin, Link as LinkIcon, X, CheckCircle2, LogOut, Sparkles, Users, FileText, Activity, ShieldAlert, Award } from 'lucide-react';
@@ -51,7 +51,7 @@ const ARTICLES: any[] = [
     excerpt: "Despite early quarter concerns, major technology firms report record-breaking earnings.",
     author: "Sarah Jenkins",
     role: "Senior Financial Correspondent",
-    date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    date: 'June 15, 2026',
     time: "2 hours ago",
     category: "Business",
     imageUrl: "https://picsum.photos/seed/markets/1200/800",
@@ -68,7 +68,7 @@ const ARTICLES: any[] = [
     excerpt: "World leaders agree on aggressive new carbon reduction targets for 2035.",
     author: "David Chen",
     role: "Environmental Editor",
-    date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    date: 'June 15, 2026',
     time: "4 hours ago",
     category: "World",
     imageUrl: "https://picsum.photos/seed/climate/600/400",
@@ -81,19 +81,145 @@ const ARTICLES: any[] = [
 
 // --- Components ---
 
+// In-memory cache + in-flight promise dedup for AdSlot sponsor queries.
+// Multiple AdSlot instances on the same page share one fetch request.
+let sponsorsCache: { data: any[]; expiry: number } | null = null;
+const CACHE_TTL = 30000; // 30 seconds
+let inFlightPromise: Promise<any[]> | null = null;
+
+const fetchActiveSponsors = async (): Promise<any[]> => {
+  // Return cached data if still fresh
+  if (sponsorsCache && Date.now() < sponsorsCache.expiry) {
+    return sponsorsCache.data;
+  }
+  // Dedup concurrent requests — share the same in-flight promise
+  if (inFlightPromise) {
+    return inFlightPromise;
+  }
+  inFlightPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ad_sponsors')
+        .select('*')
+        .eq('is_active', true);
+      if (error) throw error;
+      const fetched = data || [];
+      sponsorsCache = { data: fetched, expiry: Date.now() + CACHE_TTL };
+      console.log('[AdSlot] Fetched & cached ' + fetched.length + ' sponsors');
+      return fetched;
+    } catch (e) {
+      console.warn('[AdSlot] Failed to fetch sponsors:', e);
+      // Serve stale cache as fallback
+      if (sponsorsCache && sponsorsCache.data.length > 0) {
+        console.log('[AdSlot] Serving stale cache (' + sponsorsCache.data.length + ' sponsors)');
+        return sponsorsCache.data;
+      }
+      return [];
+    } finally {
+      inFlightPromise = null;
+    }
+  })();
+  return inFlightPromise;
+};
+
 const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: string, height?: string, format?: string, className?: string }) => {
-  return (
-    <div 
-      className={`ad-placeholder ${className}`} 
+  const [sponsors, setSponsors] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [shouldShow, setShouldShow] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const cycleRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fetched = await fetchActiveSponsors();
+      if (cancelled) return;
+      setSponsors(fetched);
+      // Frequency gate: use the FIRST sponsor's frequency for the overall decision
+      // (frequency controls how often ad slots appear on page load)
+      const freq = fetched.length > 0 ? (fetched[0].frequency ?? 1) : 1;
+      setShouldShow(fetched.length > 0 && Math.random() < (1 / freq));
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Rotation timer: cycle through sponsors every `duration_seconds`
+  useEffect(() => {
+    if (sponsors.length <= 1) return;
+    const duration = (sponsors[currentIndex]?.duration_seconds ?? 10) * 1000;
+    cycleRef.current = setTimeout(() => {
+      setCurrentIndex(prev => (prev + 1) % sponsors.length);
+    }, duration);
+    return () => {
+      if (cycleRef.current) clearTimeout(cycleRef.current);
+    };
+  }, [sponsors, currentIndex]);
+
+  const currentSponsor = sponsors.length > 0 ? sponsors[currentIndex % sponsors.length] : null;
+
+  // Show placeholder while loading, if no sponsors, or if frequency gate says no
+  if (loading || sponsors.length === 0 || !shouldShow) {
+    return (
+      <div 
+        className={`ad-placeholder ${className}`} 
+        style={{ width: width || '100%', height: height || '250px' }}
+        aria-label="Advertisement"
+      >
+        <span className="mb-1 font-semibold">Advertisement</span>
+        <span className="text-[10px] opacity-70">
+          {width && height ? `${width} x ${height}` : format}
+        </span>
+      </div>
+    );
+  }
+
+  // Render active sponsor ad
+  const container = (
+    <div
+      className={`relative overflow-hidden bg-white ${className}`}
       style={{ width: width || '100%', height: height || '250px' }}
-      aria-label="Advertisement"
+      aria-label={`Advertisement: ${currentSponsor.name}`}
     >
-      <span className="mb-1 font-semibold">Advertisement</span>
-      <span className="text-[10px] opacity-70">
-        {width && height ? `${width} x ${height}` : format}
-      </span>
+      {currentSponsor.image_url ? (
+        <img
+          src={currentSponsor.image_url}
+          alt={currentSponsor.name}
+          className="w-full h-full object-contain p-1"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-bold text-gray-700 text-sm text-center px-2">
+            {currentSponsor.name}
+          </span>
+        </div>
+      )}
+      {/* Sponsor label */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent px-2 py-1">
+        <span className="text-[10px] text-white/80 font-semibold">
+          Sponsored by {currentSponsor.name}
+        </span>
+      </div>
     </div>
   );
+
+  // Wrap in link if target_url exists
+  if (currentSponsor.target_url) {
+    return (
+      <a
+        href={currentSponsor.target_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block no-underline"
+      >
+        {container}
+      </a>
+    );
+  }
+
+  return container;
 };
 
 // SEO Component
@@ -195,12 +321,6 @@ const Header = () => {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const queryStr = searchQuery.trim();
-    if (queryStr === 'admin123123') {
-      navigate('/admin');
-      setIsSearchOpen(false);
-      setSearchQuery('');
-      return;
-    }
     if (queryStr) {
       navigate(`/?q=${encodeURIComponent(queryStr)}`);
       setIsSearchOpen(false);
@@ -546,7 +666,7 @@ const HomePage = () => {
     }
     
     return result;
-  }, [category, query]);
+  }, [articles, category, query]);
 
   // If filtering, we just show a grid of results. Otherwise, show the complex layout.
   const isFiltering = category || query;
@@ -808,8 +928,8 @@ const ArticlePage = () => {
           "@type": "NewsArticle",
           "headline": article.title,
           "image": article.imageUrl ? [article.imageUrl] : [],
-          "datePublished": article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString(),
-          "dateModified": article.updatedAt ? new Date(article.updatedAt).toISOString() : (article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString()),
+          "datePublished": article.createdAt ? new Date(article.createdAt).toISOString() : '',
+          "dateModified": article.updatedAt ? new Date(article.updatedAt).toISOString() : (article.createdAt ? new Date(article.createdAt).toISOString() : ''),
           "author": [{
             "@type": "Person",
             "name": article.author,
