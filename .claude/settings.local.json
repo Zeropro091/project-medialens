@@ -8,7 +8,8 @@
       "Bash(ls:*)",
       "Bash(pkill -f \"node --import tsx/esm server.ts\")",
       "Bash(echo \"Started PID: $!\")",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)"
     ]
   }
 }
