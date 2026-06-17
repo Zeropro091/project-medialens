@@ -82,8 +82,26 @@ INSERT INTO public.profiles (id, email, role, quota)
 VALUES ('00000000-0000-0000-0000-000000000004', 'user@user.com', 'user', 5)
 ON CONFLICT (id) DO UPDATE SET role = 'user', quota = 5;
 
+-- Seed categories with fixed UUIDs
+INSERT INTO public.categories (id, slug, name, level, sort_order) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'business', 'Business', 0, 1),
+  ('aaaaaaaa-0000-0000-0000-000000000002', 'world', 'World', 0, 2),
+  ('aaaaaaaa-0000-0000-0000-000000000003', 'tech', 'Tech', 0, 3),
+  ('aaaaaaaa-0000-0000-0000-000000000004', 'science', 'Science', 0, 4),
+  ('aaaaaaaa-0000-0000-0000-000000000005', 'politics', 'Politics', 0, 5),
+  ('aaaaaaaa-0000-0000-0000-000000000006', 'health', 'Health', 0, 6),
+  ('aaaaaaaa-0000-0000-0000-000000000007', 'sports', 'Sports', 0, 7),
+  ('aaaaaaaa-0000-0000-0000-000000000008', 'arts', 'Arts', 0, 8),
+  ('aaaaaaaa-0000-0000-0000-000000000009', 'opinion', 'Opinion', 0, 9)
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed a default author
+INSERT INTO public.authors (id, slug, name, bio)
+VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'editorial-team', 'Editorial Team', 'Lensa Insignia editorial staff.')
+ON CONFLICT (id) DO NOTHING;
+
 -- Seed articles table
-insert into public.articles (id, title, subtitle, excerpt, author, role, date, time, category, "imageUrl", "contentArr", "contentStr", status) values
+insert into public.articles (id, title, subtitle, excerpt, author, role, date, time, category, "imageUrl", "contentArr", "contentStr", status, slug, category_id, author_id, "publishedAt") values
 (
   'featured-1',
   'Global Markets Rally as Tech Sector Shows Unexpected Resilience',
