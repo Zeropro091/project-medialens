@@ -5,7 +5,8 @@
       "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
       "Bash(NODE_ENV=production node --import tsx/esm server.ts)",
       "Bash(echo \"PID: $!\")",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(pkill -f \"node --import tsx/esm server.ts\")"
     ]
   }
 }
