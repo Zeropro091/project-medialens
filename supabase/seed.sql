@@ -122,7 +122,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'For now, however, the bulls are firmly in control. As the trading day closed, the atmosphere on the trading floors was one of cautious jubilation. The tech sector has once again proven its ability to drive the broader market, leaving investors eagerly anticipating the next wave of innovation and growth.'
   ],
   null,
-  'published'
+  'published',
+  'featured-1',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'sec-1',
@@ -142,7 +146,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'sec-1',
+  'aaaaaaaa-0000-0000-0000-000000000002',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'sec-2',
@@ -162,7 +170,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'sec-2',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'sec-3',
@@ -182,7 +194,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'sec-3',
+  'aaaaaaaa-0000-0000-0000-000000000003',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'sec-4',
@@ -202,7 +218,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'sec-4',
+  'aaaaaaaa-0000-0000-0000-000000000004',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'trend-1',
@@ -222,7 +242,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'trend-1',
+  'aaaaaaaa-0000-0000-0000-000000000005',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'trend-2',
@@ -242,7 +266,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'trend-2',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'trend-3',
@@ -262,7 +290,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'trend-3',
+  'aaaaaaaa-0000-0000-0000-000000000003',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'trend-4',
@@ -282,7 +314,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'trend-4',
+  'aaaaaaaa-0000-0000-0000-000000000006',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 ),
 (
   'trend-5',
@@ -302,7 +338,11 @@ insert into public.articles (id, title, subtitle, excerpt, author, role, date, t
     'As the situation continues to evolve, one thing is certain: the landscape has changed permanently. Observers advise cautious optimism while preparing for a range of possible outcomes in the near future.'
   ],
   null,
-  'published'
+  'published',
+  'trend-5',
+  'aaaaaaaa-0000-0000-0000-000000000004',
+  'bbbbbbbb-0000-0000-0000-000000000001',
+  now()
 )
 on conflict (id) do update set
   title = excluded.title,
@@ -316,4 +356,8 @@ on conflict (id) do update set
   "imageUrl" = excluded."imageUrl",
   "contentArr" = excluded."contentArr",
   "contentStr" = excluded."contentStr",
-  status = excluded.status;
+  status = excluded.status,
+  slug = excluded.slug,
+  category_id = excluded.category_id,
+  author_id = excluded.author_id,
+  "publishedAt" = excluded."publishedAt";
