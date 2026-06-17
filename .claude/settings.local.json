@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cloudflared tunnel:*)",
-      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")"
+      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
+      "Bash(NODE_ENV=production node --import tsx/esm server.ts)",
+      "Bash(echo \"PID: $!\")"
     ]
   }
 }
