@@ -364,3 +364,6 @@ on conflict (id) do update set
   category_id = excluded.category_id,
   author_id = excluded.author_id,
   published_at = excluded.published_at;
+
+-- Re-enable FK checks
+SET session_replication_role = 'origin';
