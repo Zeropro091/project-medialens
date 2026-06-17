@@ -101,7 +101,7 @@ VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'editorial-team', 'Editorial Tea
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed articles table
-insert into public.articles (id, title, subtitle, excerpt, author, role, date, time, category, "imageUrl", "contentArr", "contentStr", status, slug, category_id, author_id, "publishedAt") values
+insert into public.articles (id, title, subtitle, excerpt, author, role, date, time, category, "imageUrl", "contentArr", "contentStr", status, slug, category_id, author_id, published_at) values
 (
   'featured-1',
   'Global Markets Rally as Tech Sector Shows Unexpected Resilience',
