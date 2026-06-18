@@ -1,0 +1,217 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.layout{display:grid;grid-template-columns:1fr 280px;gap:0;min-height:600px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;background:var(--color-background-primary)}
+.editor-col{display:flex;flex-direction:column;border-right:0.5px solid var(--color-border-tertiary)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#639922;flex-shrink:0}
+.draft-label{font-size:12px;color:var(--color-text-secondary)}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:var(--border-radius-md);font-size:13px;cursor:pointer;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);transition:background 0.15s}
+.btn:hover{background:var(--color-background-secondary)}
+.btn-primary{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.btn-primary:hover{background:#0F6E56;border-color:#0F6E56}
+.toolbar{display:flex;align-items:center;gap:2px;padding:8px 16px;border-bottom:0.5px solid var(--color-border-tertiary);flex-wrap:wrap}
+.tb-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:15px;transition:background 0.12s}
+.tb-btn:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.tb-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.tb-sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 4px}
+.dropcap-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);padding:4px 10px;border-radius:20px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);cursor:pointer;transition:all 0.15s;margin-left:4px}
+.dropcap-toggle.on{background:#E1F5EE;border-color:#5DCAA5;color:#0F6E56}
+.editor-body{flex:1;padding:24px 32px;overflow-y:auto}
+.title-input{width:100%;border:none;outline:none;font-size:26px;font-weight:500;color:var(--color-text-primary);background:transparent;line-height:1.3;margin-bottom:4px;resize:none;font-family:var(--font-sans)}
+.title-input::placeholder{color:var(--color-text-tertiary)}
+.meta-row{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.meta-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);padding:4px 10px;border-radius:20px;border:0.5px solid var(--color-border-tertiary)}
+.content-area{width:100%;min-height:280px;border:none;outline:none;font-size:15px;line-height:1.8;color:var(--color-text-primary);background:transparent;font-family:var(--font-sans)}
+.content-area:empty::before{content:attr(data-placeholder);color:var(--color-text-tertiary);pointer-events:none}
+.content-area.dropcap-on::first-letter{font-size:4em;font-weight:500;float:left;line-height:0.82;margin-right:7px;margin-top:5px;color:#1D9E75;font-family:var(--font-serif)}
+.wordcount{font-size:12px;color:var(--color-text-tertiary);padding:10px 32px 16px;text-align:right}
+.sidebar{background:var(--color-background-secondary);display:flex;flex-direction:column}
+.sb-section{padding:16px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.sb-section:last-child{border-bottom:none}
+.sb-label{font-size:11px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px}
+.cover-box{border:0.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;background:var(--color-background-primary);color:var(--color-text-tertiary);font-size:12px}
+.tag-input{width:100%;padding:6px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;outline:none;font-family:var(--font-sans)}
+.tags-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#E1F5EE;color:#0F6E56;padding:3px 9px;border-radius:20px}
+.tag i{font-size:11px;cursor:pointer;opacity:0.7}
+.select-field{width:100%;padding:6px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;outline:none;font-family:var(--font-sans)}
+.seo-field{width:100%;padding:6px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;outline:none;resize:none;font-family:var(--font-sans);margin-bottom:6px}
+.seo-bar{height:4px;border-radius:2px;background:var(--color-border-tertiary);overflow:hidden;margin-top:4px}
+.seo-fill{height:100%;border-radius:2px;background:#639922;width:62%}
+.seo-score{font-size:11px;color:#3B6D11;margin-top:4px}
+.ai-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;cursor:pointer;transition:all 0.15s;margin-bottom:8px}
+.ai-btn:hover{border-color:#1D9E75;color:#1D9E75}
+.char-hint{font-size:11px;color:var(--color-text-tertiary);margin-top:3px}
+.dropcap-preview{font-size:11px;color:var(--color-text-tertiary);margin-top:8px;padding:8px 10px;background:var(--color-background-primary);border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);display:none}
+.dropcap-preview.show{display:block}
+</style>
+
+<h2 class="sr-only">Editor Penulisan Artikel Sema Insight</h2>
+
+<div class="layout">
+  <div class="editor-col">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="status-dot"></div>
+        <span class="draft-label">Tersimpan otomatis — draft</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn"><i class="ti ti-eye" aria-hidden="true"></i> Pratinjau</button>
+        <button class="btn btn-primary" onclick="sendPrompt('Bantu review artikel ini sebelum publish')"><i class="ti ti-send" aria-hidden="true"></i> Publikasi ↗</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="tb-btn" title="Bold" onclick="fmt('bold')"><i class="ti ti-bold" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Italic" onclick="fmt('italic')"><i class="ti ti-italic" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Underline" onclick="fmt('underline')"><i class="ti ti-underline" aria-hidden="true"></i></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" title="Heading" onclick="fmt('formatBlock','h2')"><i class="ti ti-heading" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Quote" onclick="fmt('formatBlock','blockquote')"><i class="ti ti-quote" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Bullet list" onclick="fmt('insertUnorderedList')"><i class="ti ti-list" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Numbered list" onclick="fmt('insertOrderedList')"><i class="ti ti-list-numbers" aria-hidden="true"></i></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" title="Link" onclick="fmt('createLink',prompt('URL:'))"><i class="ti ti-link" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Sisipkan gambar"><i class="ti ti-photo" aria-hidden="true"></i></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" title="Undo" onclick="fmt('undo')"><i class="ti ti-arrow-back-up" aria-hidden="true"></i></button>
+      <button class="tb-btn" title="Redo" onclick="fmt('redo')"><i class="ti ti-arrow-forward-up" aria-hidden="true"></i></button>
+      <div class="tb-sep"></div>
+      <button class="dropcap-toggle" id="dcToggle" onclick="toggleDropcap()" title="Aktifkan drop cap di paragraf pertama">
+        <span style="font-size:15px;font-weight:500;font-family:var(--font-serif);line-height:1">D</span> Drop cap
+      </button>
+    </div>
+
+    <div class="editor-body">
+      <textarea class="title-input" rows="2" placeholder="Judul artikel..." id="titleInput" oninput="updateCount()"></textarea>
+      <div class="meta-row">
+        <span class="meta-chip"><i class="ti ti-user" style="font-size:13px" aria-hidden="true"></i> Rifky Aditya</span>
+        <span class="meta-chip"><i class="ti ti-calendar" style="font-size:13px" aria-hidden="true"></i> 18 Jun 2026</span>
+        <span class="meta-chip"><i class="ti ti-folder" style="font-size:13px" aria-hidden="true"></i> Ekonomi</span>
+      </div>
+      <div
+        class="content-area"
+        id="contentArea"
+        contenteditable="true"
+        data-placeholder="Mulai menulis artikel di sini..."
+        oninput="updateCount()"
+      ></div>
+    </div>
+    <div class="wordcount" id="wordcount">0 kata · 0 karakter</div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sb-section">
+      <div class="sb-label">Gambar sampul</div>
+      <div class="cover-box">
+        <i class="ti ti-photo-up" style="font-size:22px" aria-hidden="true"></i>
+        <span>Unggah gambar</span>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label">Kategori</div>
+      <select class="select-field">
+        <option>Ekonomi</option>
+        <option>Politik</option>
+        <option>Teknologi</option>
+        <option>Bisnis</option>
+        <option>Sosial</option>
+        <option>Budaya</option>
+      </select>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label">Tag</div>
+      <input class="tag-input" placeholder="Tambah tag, tekan Enter..." id="tagInput" onkeydown="addTag(event)">
+      <div class="tags-row" id="tagsRow">
+        <span class="tag">inflasi <i class="ti ti-x" onclick="removeTag(this)" aria-label="hapus tag"></i></span>
+        <span class="tag">BI Rate <i class="ti ti-x" onclick="removeTag(this)" aria-label="hapus tag"></i></span>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label">Drop cap</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;color:var(--color-text-secondary)">Huruf besar di awal</span>
+        <button class="dropcap-toggle" id="dcToggle2" onclick="toggleDropcap()" style="margin-left:0">
+          <span style="font-size:15px;font-weight:500;font-family:var(--font-serif);line-height:1">D</span> <span id="dcStatus">Nonaktif</span>
+        </button>
+      </div>
+      <div class="dropcap-preview" id="dcPreview">
+        <span style="font-size:22px;font-weight:500;float:left;line-height:0.85;margin-right:5px;margin-top:3px;color:#1D9E75;font-family:var(--font-serif)">S</span>
+        <span style="font-size:11px;color:var(--color-text-secondary);line-height:1.6">eperti inilah tampilan drop cap di artikel yang sudah dipublikasikan — huruf pertama akan lebih besar dan berwarna.</span>
+        <div style="clear:both"></div>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label">SEO</div>
+      <textarea class="seo-field" rows="2" placeholder="Meta deskripsi..."></textarea>
+      <span class="char-hint">Idealnya 120–160 karakter</span>
+      <div class="seo-bar"><div class="seo-fill"></div></div>
+      <div class="seo-score">Skor SEO: Cukup baik</div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label">Alat AI</div>
+      <button class="ai-btn" onclick="sendPrompt('Buatkan ringkasan artikel ini dalam 2 kalimat untuk meta deskripsi SEO')">
+        <i class="ti ti-sparkles" aria-hidden="true"></i> Generate meta deskripsi ↗
+      </button>
+      <button class="ai-btn" onclick="sendPrompt('Cek artikel ini: ada kesalahan fakta, ejaan, atau kalimat yang kurang natural?')">
+        <i class="ti ti-check" aria-hidden="true"></i> Cek & perbaiki teks ↗
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+var dcOn=false;
+function toggleDropcap(){
+  dcOn=!dcOn;
+  var ca=document.getElementById('contentArea');
+  var t1=document.getElementById('dcToggle');
+  var t2=document.getElementById('dcToggle2');
+  var st=document.getElementById('dcStatus');
+  var pr=document.getElementById('dcPreview');
+  if(dcOn){
+    ca.classList.add('dropcap-on');
+    t1&&t1.classList.add('on');
+    t2&&t2.classList.add('on');
+    if(st)st.textContent='Aktif';
+    if(pr)pr.classList.add('show');
+  } else {
+    ca.classList.remove('dropcap-on');
+    t1&&t1.classList.remove('on');
+    t2&&t2.classList.remove('on');
+    if(st)st.textContent='Nonaktif';
+    if(pr)pr.classList.remove('show');
+  }
+}
+function fmt(cmd,val){
+  document.getElementById('contentArea').focus();
+  document.execCommand(cmd,false,val||null);
+}
+function updateCount(){
+  var t=(document.getElementById('titleInput').value||'')+' '+(document.getElementById('contentArea').innerText||'');
+  var words=t.trim()?t.trim().split(/\s+/).length:0;
+  var chars=(document.getElementById('contentArea').innerText||'').length;
+  document.getElementById('wordcount').textContent=words+' kata · '+chars+' karakter';
+}
+function addTag(e){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    var val=document.getElementById('tagInput').value.trim();
+    if(!val)return;
+    var span=document.createElement('span');
+    span.className='tag';
+    span.innerHTML=val+' <i class="ti ti-x" onclick="removeTag(this)" aria-label="hapus tag"></i>';
+    document.getElementById('tagsRow').appendChild(span);
+    document.getElementById('tagInput').value='';
+  }
+}
+function removeTag(el){el.parentElement.remove()}
+</script>

@@ -6,6 +6,33 @@ import { LogOut, Plus, Edit2, Trash2, Archive, CheckCircle, Database, X, UploadC
 import MDEditor from '@uiw/react-md-editor';
 import { useAuth } from '../components/AuthProvider';
 
+// --- Category name → UUID mapping (matches seed.sql fixed UUIDs) ---
+const CATEGORY_UUID_MAP: Record<string, string> = {
+  'Business':  'aaaaaaaa-0000-0000-0000-000000000001',
+  'World':     'aaaaaaaa-0000-0000-0000-000000000002',
+  'Tech':      'aaaaaaaa-0000-0000-0000-000000000003',
+  'Science':   'aaaaaaaa-0000-0000-0000-000000000004',
+  'Politics':  'aaaaaaaa-0000-0000-0000-000000000005',
+  'Health':    'aaaaaaaa-0000-0000-0000-000000000006',
+  'Sports':    'aaaaaaaa-0000-0000-0000-000000000007',
+  'Arts':      'aaaaaaaa-0000-0000-0000-000000000008',
+  'Opinion':   'aaaaaaaa-0000-0000-0000-000000000009',
+};
+
+/** Generate a URL-safe slug from a title string, with a short unique suffix. */
+function slugify(text: string): string {
+  const base = text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')   // remove non-word chars
+    .replace(/[\s_]+/g, '-')     // spaces/underscores → hyphens
+    .replace(/-+/g, '-')         // collapse multiple hyphens
+    .replace(/^-+|-+$/g, '');    // trim leading/trailing hyphens
+  // Append a short suffix to guarantee uniqueness within the same category
+  const suffix = Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 4);
+  return `${base}-${suffix}`;
+}
+
 const SAMPLE_ARTICLES = [
   {
     title: "Global Markets Rally as Tech Sector Shows Unexpected Resilience",
@@ -21,7 +48,7 @@ const SAMPLE_ARTICLES = [
       "The global financial markets experienced an unprecedented surge today.",
       "At the heart of this rally are the quarterly earnings reports from the 'Big Tech' conglomerates."
     ],
-    status: "published"
+    status: "draft"
   },
   {
     title: "New Climate Accord Reached in Geneva Summit",
@@ -36,7 +63,7 @@ const SAMPLE_ARTICLES = [
     contentArr: [
       "World leaders gathered today to announce a bold new plan."
     ],
-    status: "published"
+    status: "draft"
   }
 ];
 
@@ -97,6 +124,7 @@ export default function AdminDashboard() {
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contentImgRef = useRef<HTMLInputElement>(null);
 
   const fetchGallery = async () => {
     try {
@@ -479,9 +507,36 @@ export default function AdminDashboard() {
   const handleArchiveState = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'published' ? 'archived' : 'published';
     try {
+      const updatePayload: Record<string, any> = { status: newStatus };
+
+      // When re-publishing, ensure all required fields are set
+      if (newStatus === 'published') {
+        // Fetch current article to fill in any missing required fields
+        const { data: article } = await supabase
+          .from('articles')
+          .select('title, slug, category, category_id, author_id, published_at')
+          .eq('id', id)
+          .single();
+
+        if (article) {
+          if (!article.slug && article.title) {
+            updatePayload.slug = slugify(article.title);
+          }
+          if (!article.category_id && article.category) {
+            updatePayload.category_id = CATEGORY_UUID_MAP[article.category] || null;
+          }
+          if (!article.author_id && user) {
+            updatePayload.author_id = user.id;
+          }
+          if (!article.published_at) {
+            updatePayload.published_at = new Date().toISOString();
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('articles')
-        .update({ status: newStatus })
+        .update(updatePayload)
         .eq('id', id);
       if (error) throw error;
       fetchArticles();
@@ -510,7 +565,7 @@ export default function AdminDashboard() {
         category: "World",
         imageUrl: "",
         contentStr: "",
-        status: "published"
+        status: "draft"
       });
     }
     setIsModalOpen(true);
@@ -535,6 +590,8 @@ export default function AdminDashboard() {
         ? contentStr.split(/\n{2,}/).filter((p: string) => p.trim() !== '')
         : src.contentArr || [];
 
+      const articleStatus = src.status || 'draft';
+
       const basePayload: Record<string, any> = {
         title:      src.title,
         subtitle:   src.subtitle || null,
@@ -547,13 +604,31 @@ export default function AdminDashboard() {
         imageUrl:   src.imageUrl || null,
         contentArr,
         contentStr: contentStr || null,
-        status:     src.status || 'published',
+        status:     articleStatus,
       };
+
+      // Auto-generate slug from title
+      if (src.title) {
+        basePayload.slug = slugify(src.title);
+      }
+
+      // Map category name → category_id FK
+      if (src.category && CATEGORY_UUID_MAP[src.category]) {
+        basePayload.category_id = CATEGORY_UUID_MAP[src.category];
+      }
+
+      // Set published_at when publishing
+      if (articleStatus === 'published') {
+        basePayload.published_at = src.published_at || new Date().toISOString();
+      }
 
       const now = new Date().toISOString();
 
       if (src.id) {
-        // UPDATE
+        // Set author_id if missing (FK references profiles.id = auth user UUID)
+        if (!src.author_id && user) {
+          basePayload.author_id = user.id;
+        }
         const { error } = await supabase
           .from('articles')
           .update({ ...basePayload, updatedAt: now })
@@ -932,28 +1007,271 @@ export default function AdminDashboard() {
         )}
       </div>
       
-      {isModalOpen && editingArticle && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
-              <h2 className="text-2xl font-bold">{editingArticle.id ? 'Edit Article' : 'New Article'}</h2>
-              <button onClick={closeModal} className="text-gray-500 hover:text-gray-800"><X size={24} /></button>
-            </div>
-            
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold mb-1">Title</label>
-                <input required type="text" className="w-full border p-2 rounded" value={editingArticle.title} onChange={e => setEditingArticle({...editingArticle, title: e.target.value})} />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-1">Author</label>
-                  <input required type="text" className="w-full border p-2 rounded" value={editingArticle.author} onChange={e => setEditingArticle({...editingArticle, author: e.target.value})} />
+      {isModalOpen && editingArticle && (() => {
+        const contentText = editingArticle.contentStr || (editingArticle.contentArr ? editingArticle.contentArr.join('\n\n') : '');
+        const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
+        const charCount = contentText.length;
+        const metaDesc = editingArticle.excerpt || '';
+        const metaLen = metaDesc.length;
+        const tags: string[] = editingArticle.tags || [];
+        const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = (e.target as HTMLInputElement).value.trim();
+            if (val && !tags.includes(val)) {
+              setEditingArticle({ ...editingArticle, tags: [...tags, val] });
+            }
+            (e.target as HTMLInputElement).value = '';
+          }
+        };
+        const handleRemoveTag = (tag: string) => {
+          setEditingArticle({ ...editingArticle, tags: tags.filter(t => t !== tag) });
+        };
+        const publishAndSave = (e: React.MouseEvent) => {
+          e.preventDefault();
+          setEditingArticle((prev: any) => {
+            const updated = { ...prev, status: 'published' };
+            // Trigger save on next tick after state update
+            setTimeout(() => {
+              const form = document.getElementById('sema-editor-form') as HTMLFormElement;
+              if (form) form.requestSubmit();
+            }, 0);
+            return updated;
+          });
+        };
+
+        return (
+        <div className="fixed inset-0 z-50" style={{ background: '#fff' }}>
+          <form id="sema-editor-form" onSubmit={handleSave} className="h-full flex flex-col">
+            {/* ──── Full-screen 2-column layout ──── */}
+            <div className="flex-1 min-h-0" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0 }}>
+              {/* ════════ LEFT: Editor Column ════════ */}
+              <div className="flex flex-col border-r" style={{ borderColor: '#e5e7eb' }}>
+                {/* Top bar */}
+                <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#e5e7eb', background: '#f9fafb' }}>
+                  <div className="flex items-center gap-2.5">
+                    <button type="button" onClick={closeModal} className="p-1.5 rounded hover:bg-gray-200 transition-colors" style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                      <X size={18} className="text-gray-500" />
+                    </button>
+                    <div className="w-2 h-2 rounded-full" style={{ background: editingArticle.status === 'published' ? '#1D9E75' : '#f59e0b' }} />
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                      {editingArticle.id ? 'Editing' : 'New'} — {editingArticle.status || 'draft'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                      style={{ border: '1px solid #d1d5db', background: '#fff', color: '#374151', cursor: loading ? 'not-allowed' : 'pointer' }}
+                    >
+                      {loading ? 'Saving...' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={publishAndSave}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                      style={{ border: '1px solid #1D9E75', background: '#1D9E75', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}
+                    >
+                      Publish ↗
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-1">Category</label>
-                  <select required className="w-full border p-2 rounded" value={editingArticle.category} onChange={e => setEditingArticle({...editingArticle, category: e.target.value})}>
+
+                {/* Editor body */}
+                <div className="flex-1 overflow-y-auto" style={{ padding: '28px 36px' }}>
+                  <textarea
+                    required
+                    rows={2}
+                    placeholder="Article title..."
+                    value={editingArticle.title}
+                    onChange={e => setEditingArticle({ ...editingArticle, title: e.target.value })}
+                    style={{
+                      width: '100%', border: 'none', outline: 'none', fontSize: 28, fontWeight: 600,
+                      color: '#111827', background: 'transparent', lineHeight: 1.3, marginBottom: 6,
+                      resize: 'none', fontFamily: 'inherit',
+                    }}
+                  />
+
+                  {/* Meta chips */}
+                  <div className="flex items-center gap-3 mb-5 pb-4 border-b" style={{ borderColor: '#e5e7eb' }}>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ fontSize: 12, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                      ✎ {editingArticle.author || 'Author'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ fontSize: 12, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                      📅 {editingArticle.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ fontSize: 12, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                      📁 {editingArticle.category || 'Category'}
+                    </span>
+                  </div>
+
+                  {/* Image toolbar */}
+                  <div className="flex items-center gap-2 mb-3 pb-3 border-b" style={{ borderColor: '#e5e7eb' }}>
+                    <button
+                      type="button"
+                      onClick={() => contentImgRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors hover:bg-gray-100"
+                      style={{ border: '1px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                    >
+                      <UploadCloud size={14} /> Insert Image
+                    </button>
+                    <input
+                      type="file"
+                      ref={contentImgRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const url = await uploadFileToStorage(file);
+                          insertImageIntoContent(url, file.name);
+                          setGalleryImages(prev => [...prev, { url, name: file.name }]);
+                        } catch (err: any) {
+                          alert('Failed to upload: ' + err.message);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>or drag & drop images into the editor</span>
+                  </div>
+
+                  {/* MDEditor */}
+                  <div data-color-mode="light">
+                    <MDEditor
+                      value={contentText}
+                      onChange={(val) => setEditingArticle({ ...editingArticle, contentStr: val || '' })}
+                      onDrop={handleTextareaDrop}
+                      height={500}
+                      style={{ border: 'none', boxShadow: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Word count */}
+                <div style={{ fontSize: 12, color: '#9ca3af', padding: '8px 36px 12px', textAlign: 'right', borderTop: '1px solid #e5e7eb' }}>
+                  {wordCount} words · {charCount} characters
+                </div>
+              </div>
+
+              {/* ════════ RIGHT: Sidebar ════════ */}
+              <div className="flex flex-col overflow-y-auto" style={{ background: '#f9fafb' }}>
+                {/* Cover image */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Cover Image</div>
+                  {editingArticle.imageUrl && !isUploadingImage ? (
+                    <div className="relative group rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb' }}>
+                      <img src={editingArticle.imageUrl} alt="Cover" style={{ width: '100%', height: 120, objectFit: 'cover' }} onError={() => setEditingArticle((prev: any) => ({ ...prev, _imgError: true }))} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                        <button type="button" onClick={() => fileInputRef.current?.click()} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: 'none', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 600 }}>Change</button>
+                        <button type="button" onClick={() => setEditingArticle((prev: any) => ({ ...prev, imageUrl: '', _imgError: false }))} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                      onDragLeave={() => setIsDraggingImage(false)}
+                      onDrop={(e) => { e.preventDefault(); setIsDraggingImage(false); const f = e.dataTransfer.files?.[0]; if (f && f.type.startsWith('image/')) handleImageUpload(f); }}
+                      className="flex flex-col items-center justify-center gap-1.5 rounded-lg"
+                      style={{ height: 110, border: `1.5px dashed ${isDraggingImage ? '#1D9E75' : '#d1d5db'}`, background: isDraggingImage ? '#E1F5EE' : '#fff', cursor: 'pointer', color: '#9ca3af', fontSize: 12, transition: 'all 0.15s' }}
+                    >
+                      {isUploadingImage ? <><UploadCloud size={20} className="animate-bounce" /> Uploading...</> : <><UploadCloud size={20} /><span>Upload image</span></>}
+                    </div>
+                  )}
+                  <input type="url" placeholder="or paste URL..." value={editingArticle.imageUrl || ''} onChange={e => setEditingArticle({ ...editingArticle, imageUrl: e.target.value })} style={{ width: '100%', marginTop: 6, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, outline: 'none', background: '#fff', color: '#374151' }} />
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
+                  <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" multiple onChange={(e: React.ChangeEvent<HTMLInputElement>) => { const files = Array.from(e.target.files || []) as File[]; if (files.length > 0) handleBatchGalleryUpload(files); }} />
+                </div>
+
+                {/* ── Image Gallery (insert into content) ── */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Image Gallery</div>
+                    <button type="button" onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-1" style={{ fontSize: 11, fontWeight: 600, color: '#1D9E75', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                      <UploadCloud size={12} /> Upload
+                    </button>
+                  </div>
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingGallery(true); }}
+                    onDragLeave={() => setIsDraggingGallery(false)}
+                    onDrop={(e) => {
+                      e.preventDefault(); setIsDraggingGallery(false);
+                      const files = Array.from(e.dataTransfer.files || []).filter((f: File) => f.type.startsWith('image/')) as File[];
+                      if (files.length > 0) handleBatchGalleryUpload(files);
+                    }}
+                    className="rounded-lg mb-2 flex items-center justify-center gap-1.5"
+                    style={{ padding: '6px 0', border: `1.5px dashed ${isDraggingGallery ? '#1D9E75' : '#d1d5db'}`, background: isDraggingGallery ? '#E1F5EE' : '#fff', fontSize: 11, color: '#9ca3af', transition: 'all 0.15s' }}
+                  >
+                    {isUploadingGallery ? <><UploadCloud size={12} className="animate-bounce" /> Uploading...</> : <><UploadCloud size={12} /> Drop images here</>}
+                  </div>
+                  {/* Gallery grid */}
+                  <div className="grid grid-cols-3 gap-1.5" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                    {galleryImages.length === 0 ? (
+                      <div className="col-span-3 text-center py-4" style={{ fontSize: 11, color: '#9ca3af' }}>No images yet</div>
+                    ) : (
+                      galleryImages.map((img, i) => (
+                        <div
+                          key={i}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('application/x-gallery-image', JSON.stringify(img));
+                            e.dataTransfer.effectAllowed = 'copy';
+                          }}
+                          className="relative rounded overflow-hidden cursor-grab active:cursor-grabbing group"
+                          style={{ aspectRatio: '1', border: '1px solid #e5e7eb' }}
+                        >
+                          <img src={img.url} className="w-full h-full object-cover" draggable={false} />
+                          {/* Hover overlay with actions */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); insertImageIntoContent(img.url, img.name); }}
+                              className="rounded-full p-1 shadow-md transition-colors"
+                              style={{ background: '#fff', border: 'none', cursor: 'pointer', color: '#1D9E75' }}
+                              title="Insert into article"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setEditingArticle({ ...editingArticle, imageUrl: img.url }); }}
+                              className="rounded-full p-1 shadow-md transition-colors"
+                              style={{ background: '#fff', border: 'none', cursor: 'pointer', color: '#374151' }}
+                              title="Set as cover image"
+                            >
+                              <CheckCircle size={14} />
+                            </button>
+                          </div>
+                          {/* Cover indicator */}
+                          {editingArticle.imageUrl === img.url && (
+                            <div className="absolute top-0.5 right-0.5 rounded-full p-0.5 shadow" style={{ background: '#1D9E75', color: '#fff' }}>
+                              <CheckCircle size={10} />
+                            </div>
+                          )}
+                          {/* Drag hint */}
+                          <div className="absolute bottom-0 left-0 right-0 text-center py-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 9 }}>
+                            Drag to insert
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Author */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Author</div>
+                  <input required type="text" value={editingArticle.author} onChange={e => setEditingArticle({ ...editingArticle, author: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }} />
+                </div>
+
+                {/* Category */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Category</div>
+                  <select required value={editingArticle.category} onChange={e => setEditingArticle({ ...editingArticle, category: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
                     <option value="World">World</option>
                     <option value="Politics">Politics</option>
                     <option value="Business">Business</option>
@@ -962,237 +1280,57 @@ export default function AdminDashboard() {
                     <option value="Health">Health</option>
                     <option value="Sports">Sports</option>
                     <option value="Arts">Arts</option>
+                    <option value="Opinion">Opinion</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1">
-                  Article Image
-                  {editingArticle.imageUrl && (
-                    <span className="text-xs text-green-600 font-normal ml-2">✓ Selected</span>
+                {/* Tags */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Tags</div>
+                  <input placeholder="Add tag, press Enter..." onKeyDown={handleAddTag} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }} />
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {tags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 rounded-full" style={{ fontSize: 12, background: '#E1F5EE', color: '#0F6E56', padding: '3px 9px' }}>
+                          {tag}
+                          <span onClick={() => handleRemoveTag(tag)} style={{ cursor: 'pointer', opacity: 0.7, fontSize: 11 }}>✕</span>
+                        </span>
+                      ))}
+                    </div>
                   )}
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="md:col-span-8 flex flex-col justify-between">
-                    {/* Image Preview or Upload Area */}
-                    {editingArticle.imageUrl && !isUploadingImage ? (
-                      <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-gray-50 group">
-                        <img
-                          src={editingArticle.imageUrl}
-                          alt="Article image preview"
-                          className="w-full h-48 object-contain bg-gray-100"
-                          onError={() => setEditingArticle(prev => ({ ...prev, _imgError: true }))}
-                        />
-                        {editingArticle._imgError && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
-                            Image failed to load
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
-                          <button
-                            type="button"
-                            onClick={() => { fileInputRef.current?.click(); }}
-                            className="bg-white text-gray-800 px-3 py-1.5 rounded text-xs font-bold shadow-md hover:bg-gray-100 transition-colors border-0 cursor-pointer"
-                          >
-                            Change
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingArticle(prev => ({ ...prev, imageUrl: '', _imgError: false }))}
-                            className="bg-red-500 text-white px-3 py-1.5 rounded text-xs font-bold shadow-md hover:bg-red-600 transition-colors border-0 cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div 
-                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors flex-1 flex flex-col justify-center ${isDraggingImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-                        onDragLeave={(e) => { e.preventDefault(); setIsDraggingImage(false); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setIsDraggingImage(false);
-                          const file = e.dataTransfer.files?.[0];
-                          if (file && file.type.startsWith('image/')) {
-                            handleImageUpload(file);
-                          }
-                        }}
-                      >
-                        {isUploadingImage ? (
-                          <div className="text-blue-500 font-semibold flex items-center justify-center space-x-2">
-                             <UploadCloud className="animate-bounce" /> <span>Uploading...</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center space-y-2">
-                            <input 
-                              type="file" 
-                              ref={fileInputRef} 
-                              className="hidden" 
-                              accept="image/*" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleImageUpload(file);
-                              }} 
-                            />
-                            <UploadCloud className="text-gray-400" size={32} />
-                            <p className="text-sm text-gray-600">
-                              Drag and drop an image here, or{' '}
-                              <button type="button" onClick={() => fileInputRef.current?.click()} className="text-blue-600 hover:underline">browse</button>
-                            </p>
-                            <span className="text-xs text-gray-400">or paste a URL below</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <input type="url" placeholder="https://..." className="w-full border p-2 rounded mt-2" value={editingArticle.imageUrl || ''} onChange={e => setEditingArticle({...editingArticle, imageUrl: e.target.value})} />
-                  </div>
-                  
-                  <div className="md:col-span-4 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4 border-gray-200 flex flex-col max-h-[340px]">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Image Gallery</span>
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors bg-transparent border-0 cursor-pointer flex items-center gap-1"
-                      >
-                        <UploadCloud size={12} />
-                        Upload
-                      </button>
-                    </div>
-
-                    {/* Drop zone for uploading images to gallery */}
-                    <div
-                      className={`border-2 border-dashed rounded-lg p-2 text-center transition-all mb-2 ${isDraggingGallery ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
-                      onDragOver={(e) => { e.preventDefault(); setIsDraggingGallery(true); }}
-                      onDragLeave={(e) => { e.preventDefault(); setIsDraggingGallery(false); }}
-                      onDrop={(e: React.DragEvent<HTMLDivElement>) => {
-                        e.preventDefault();
-                        setIsDraggingGallery(false);
-                        const dtFiles = Array.from(e.dataTransfer.files || []) as File[];
-                        const files = dtFiles.filter((f: File) => f.type.startsWith('image/'));
-                        if (files.length > 0) {
-                          handleBatchGalleryUpload(files);
-                        }
-                      }}
-                    >
-                      {isUploadingGallery ? (
-                        <div className="text-green-600 font-semibold text-xs flex items-center justify-center gap-1.5">
-                          <UploadCloud size={14} className="animate-bounce" />
-                          Uploading {galleryInputRef.current?.files?.length || ''} images...
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
-                          <UploadCloud size={14} />
-                          <span>Drop images here to upload to gallery</span>
-                        </div>
-                      )}
-                    </div>
-                    <input
-                      type="file"
-                      ref={galleryInputRef}
-                      className="hidden"
-                      accept="image/*"
-                      multiple
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        const files = Array.from(e.target.files || []) as File[];
-                        if (files.length > 0) handleBatchGalleryUpload(files);
-                      }}
-                    />
-
-                    <div className="overflow-y-auto grid grid-cols-2 gap-2 flex-1 pr-1" style={{ contentVisibility: 'auto' }}>
-                      {galleryImages.length === 0 ? (
-                        <div className="col-span-2 text-center text-xs text-gray-400 py-8">
-                          No images uploaded yet.
-                        </div>
-                      ) : (
-                        galleryImages.map((img, i) => (
-                          <div
-                            key={i}
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData('application/x-gallery-image', JSON.stringify(img));
-                              e.dataTransfer.effectAllowed = 'copy';
-                            }}
-                            onClick={() => setEditingArticle({...editingArticle, imageUrl: img.url})}
-                            className={`relative border rounded cursor-grab active:cursor-grabbing aspect-square overflow-hidden hover:border-blue-500 transition-colors group ${editingArticle.imageUrl === img.url ? 'border-blue-600 ring-2 ring-blue-100' : 'border-gray-200'}`}
-                            title={`${img.name} — Click to set as thumbnail, drag into content, or click + to insert`}
-                          >
-                            <img src={img.url} className="h-full w-full object-cover" draggable={false} />
-                            {/* Hover overlay: insert into content button */}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  insertImageIntoContent(img.url, img.name);
-                                }}
-                                className="bg-white text-gray-900 rounded-full p-1.5 shadow-md hover:bg-blue-50 hover:text-blue-600 transition-colors border-0 cursor-pointer"
-                                title="Insert image into article content"
-                              >
-                                <Plus size={16} />
-                              </button>
-                            </div>
-                            {/* Selected state indicator for thumbnail */}
-                            {editingArticle.imageUrl === img.url && (
-                              <div className="absolute top-1 right-1 bg-blue-600 text-white rounded-full p-0.5 shadow-md">
-                                <CheckCircle size={12} />
-                              </div>
-                            )}
-                            {/* Drag hint on hover */}
-                            <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                              Drag to insert
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-semibold mb-1">Excerpt</label>
-                <textarea className="w-full border p-2 rounded" rows={2} value={editingArticle.excerpt || ''} onChange={e => setEditingArticle({...editingArticle, excerpt: e.target.value})}></textarea>
-              </div>
-
-              <div data-color-mode="light">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-semibold">Content (Markdown format)</label>
-                </div>
-                <div className="border rounded overflow-hidden">
-                  <MDEditor
-                    value={editingArticle.contentStr || (editingArticle.contentArr ? editingArticle.contentArr.join('\n\n') : '')}
-                    onChange={(val) => setEditingArticle({...editingArticle, contentStr: val || ''})}
-                    onDrop={handleTextareaDrop}
-                    height={400}
-                  />
-                </div>
-              </div>
-              
-              <div className="pt-4 flex justify-end space-x-3 items-center">
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase">Status</label>
-                  <select 
-                    className="border rounded p-1.5 text-sm bg-white"
-                    value={editingArticle.status || 'draft'}
-                    onChange={e => setEditingArticle({...editingArticle, status: e.target.value})}
-                  >
+                {/* Status */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Status</div>
+                  <select value={editingArticle.status || 'draft'} onChange={e => setEditingArticle({ ...editingArticle, status: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
                     <option value="archived">Archived</option>
                   </select>
                 </div>
-                <button type="button" onClick={closeModal} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors">
-                  {loading ? 'Saving...' : 'Save Article'}
-                </button>
+
+                {/* Excerpt / SEO */}
+                <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Excerpt / Meta Description</div>
+                  <textarea rows={3} placeholder="Article summary for SEO and previews..." value={editingArticle.excerpt || ''} onChange={e => setEditingArticle({ ...editingArticle, excerpt: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', resize: 'none', background: '#fff', color: '#374151' }} />
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{metaLen}/160 characters {metaLen >= 120 && metaLen <= 160 ? '✓' : ''}</div>
+                  <div style={{ height: 4, borderRadius: 2, background: '#e5e7eb', overflow: 'hidden', marginTop: 4 }}>
+                    <div style={{ height: '100%', borderRadius: 2, background: metaLen >= 120 && metaLen <= 160 ? '#1D9E75' : metaLen > 160 ? '#ef4444' : '#f59e0b', width: `${Math.min((metaLen / 160) * 100, 100)}%`, transition: 'width 0.2s' }} />
+                  </div>
+                </div>
+
+                {/* Subtitle */}
+                <div style={{ padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Subtitle</div>
+                  <input type="text" placeholder="Optional subtitle..." value={editingArticle.subtitle || ''} onChange={e => setEditingArticle({ ...editingArticle, subtitle: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }} />
+                </div>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

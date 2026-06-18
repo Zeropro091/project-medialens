@@ -1326,6 +1326,10 @@ function AppContent({ initialArticles }: { initialArticles?: any[] }) {
   const [articles, setArticles] = useState<any[]>(initialArticles ?? ARTICLES);
   const [loading, setLoading] = useState(initialArticles ? false : true);
   const [isBoardOpen, setIsBoardOpen] = useState(false);
+  // SSR hydration guard: defer client-only UI (e.g. admin floating button)
+  // until after mount so server and client first-render match exactly.
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
 
   const fetchArticles = useCallback(async () => {
     try {
@@ -1417,7 +1421,7 @@ function AppContent({ initialArticles }: { initialArticles?: any[] }) {
           <Footer />
 
           {/* Floating Spark Button & Board Panel for Admin / Dev */}
-          {user && (role === 'admin' || role === 'dev') && (
+          {isClient && user && (role === 'admin' || role === 'dev') && (
             <>
               {/* Spark Button in bottom corner */}
               <button 
