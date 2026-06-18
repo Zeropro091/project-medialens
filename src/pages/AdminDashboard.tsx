@@ -159,7 +159,13 @@ export default function AdminDashboard() {
       });
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path);
-      return urlData.publicUrl;
+      // Return relative URL so it works through the Express reverse proxy
+      try {
+        const u = new URL(urlData.publicUrl);
+        return u.pathname; // e.g. /storage/v1/object/public/images/xxx.jpg
+      } catch {
+        return urlData.publicUrl;
+      }
     } catch (storageError) {
       console.warn('[Image Upload] Storage unavailable, falling back to base64:', storageError);
       // Fallback: read the file as a base64 data URL

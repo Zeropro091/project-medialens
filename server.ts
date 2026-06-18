@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
+import http from 'node:http';
 import 'dotenv/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +18,45 @@ const port = process.env.PORT || 3000;
 
 async function createServer() {
   const app = express();
+
+  // ── Supabase Reverse Proxy ──
+  // Proxies /rest/v1, /auth/v1, /storage/v1 to the local Supabase instance
+  // so external users (via Cloudflare Tunnel) can reach it.
+  const SUPABASE_LOCAL = process.env.VITE_SUPABASE_URL || 'http://127.0.0.1:54821';
+  const supabaseProxy: express.RequestHandler = (req, res) => {
+    const targetUrl = new URL(req.originalUrl, SUPABASE_LOCAL);
+    const options: http.RequestOptions = {
+      hostname: targetUrl.hostname,
+      port: targetUrl.port,
+      path: targetUrl.pathname + targetUrl.search,
+      method: req.method,
+      headers: { ...req.headers, host: targetUrl.host },
+    };
+    const proxyReq = http.request(options, (proxyRes) => {
+      // Forward CORS headers for browser requests
+      res.writeHead(proxyRes.statusCode || 500, {
+        ...proxyRes.headers,
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'access-control-allow-methods': '*',
+      });
+      proxyRes.pipe(res, { end: true });
+    });
+    proxyReq.on('error', (err) => {
+      console.error('[Supabase Proxy] Error:', err.message);
+      if (!res.headersSent) res.status(502).json({ error: 'Supabase proxy error' });
+    });
+    req.pipe(proxyReq, { end: true });
+  };
+  // Handle CORS preflight
+  app.options(['/rest/v1/*', '/auth/v1/*', '/storage/v1/*', '/realtime/v1/*'], (req, res) => {
+    res.set({
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': '*',
+      'access-control-allow-methods': '*',
+    }).sendStatus(204);
+  });
+  app.use(['/rest/v1', '/auth/v1', '/storage/v1', '/realtime/v1'], supabaseProxy);
 
   let vite: any;
 
