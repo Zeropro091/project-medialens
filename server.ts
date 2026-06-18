@@ -288,7 +288,7 @@ async function createServer() {
 
       const { data: articles } = await supabase
         .from('articles')
-        .select('id, title, "createdAt"')
+        .select('id, slug, title, "createdAt"')
         .eq('status', 'published')
         .gte('createdAt', fortyEightHoursAgo)
         .order('createdAt', { ascending: false })
@@ -305,7 +305,7 @@ async function createServer() {
           const escapedTitle = xmlEscape(article.title || '');
 
           xml += `  <url>\n`;
-          xml += `    <loc>${siteUrl}/article/${article.id}</loc>\n`;
+          xml += `    <loc>${siteUrl}/article/${article.slug || article.id}</loc>\n`;
           xml += `    <news:news>\n`;
           xml += `      <news:publication>\n`;
           xml += `        <news:name>Lensa Insignia</news:name>\n`;
@@ -344,7 +344,7 @@ async function createServer() {
 
       const { data: articles } = await supabase
         .from('articles')
-        .select('id, title, "createdAt"')
+        .select('id, slug, title, "createdAt"')
         .eq('status', 'published')
         .order('createdAt', { ascending: false });
 
@@ -368,7 +368,7 @@ async function createServer() {
       if (articles && articles.length > 0) {
         for (const article of articles) {
           const lastmod = article.createdAt ? new Date(article.createdAt).toISOString().split('T')[0] : '';
-          xml += `  <url>\n    <loc>${siteUrl}/article/${article.id}</loc>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n`;
+          xml += `  <url>\n    <loc>${siteUrl}/article/${article.slug || article.id}</loc>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n`;
           if (lastmod) xml += `    <lastmod>${lastmod}</lastmod>\n`;
           xml += `  </url>\n`;
         }

@@ -87,7 +87,7 @@ const AuthorPage = () => {
           {authorArticles.map(article => (
             <Link
               key={article.id}
-              to={`/article/${article.id}`}
+              to={`/article/${article.slug || article.id}`}
               className="group flex gap-6 items-start border-b border-border pb-8 hover:bg-gray-50 -mx-4 px-4 py-4 rounded-lg transition-colors"
             >
               {article.imageUrl && (

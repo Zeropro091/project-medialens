@@ -78,6 +78,10 @@ const useBookmarks = () => {
   return { bookmarkedIds, toggleBookmark, isBookmarked, refetch: fetchBookmarks };
 };
 
+// --- Helpers ---
+/** Returns the article URL path, preferring slug over id for SEO */
+const articleUrl = (a: any) => `/article/${a.slug || a.id}`;
+
 // --- Mock Data ---
 const CATEGORIES = ['World', 'Politics', 'Business', 'Tech', 'Science', 'Health', 'Sports', 'Arts', 'Opinion'];
 
@@ -669,7 +673,7 @@ const Sidebar = () => {
         <ul className="space-y-4">
           {articles.slice(0, 5).map((article, index) => (
             <li key={article.id} className="group cursor-pointer">
-              <Link to={`/article/${article.id}`} className="flex items-start">
+              <Link to={articleUrl(article)} className="flex items-start">
                 <span className="text-2xl font-serif font-bold text-gray-300 mr-4 leading-none">
                   {index + 1}
                 </span>
@@ -829,7 +833,7 @@ const HomePage = () => {
             // Filtered Grid View
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {filteredArticles.map((article) => (
-                <Link key={article.id} to={`/article/${article.id}`} className="group cursor-pointer block">
+                <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
                   <article className="flex flex-col h-full">
                     <div className="overflow-hidden mb-3 rounded-sm">
                       {article.imageUrl ? (
@@ -870,7 +874,7 @@ const HomePage = () => {
             // Default Complex Layout
             <>
               {filteredArticles.length > 0 && (
-                <Link to={`/article/${filteredArticles[0].id}`} className="group cursor-pointer block">
+                <Link to={articleUrl(filteredArticles[0])} className="group cursor-pointer block">
                   <article>
                     <div className="relative overflow-hidden mb-4 rounded-sm">
                       {filteredArticles[0].imageUrl ? (
@@ -915,7 +919,7 @@ const HomePage = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {filteredArticles.slice(1, 3).map((article) => (
-                  <Link key={article.id} to={`/article/${article.id}`} className="group cursor-pointer block">
+                  <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
                     <article className="flex flex-col h-full">
                       <div className="overflow-hidden mb-3 rounded-sm">
                         {article.imageUrl ? (
@@ -951,7 +955,7 @@ const HomePage = () => {
                   <div className="editorial-divider my-2"></div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {filteredArticles.slice(3, 5).map((article) => (
-                      <Link key={article.id} to={`/article/${article.id}`} className="group cursor-pointer block">
+                      <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
                         <article className="flex flex-col h-full">
                           <div className="overflow-hidden mb-3 rounded-sm">
                             {article.imageUrl ? (
@@ -1014,7 +1018,7 @@ const ArticlePage = () => {
   const { user } = useAuth();
   const { toggleBookmark, isBookmarked } = useBookmarks();
   
-  const article = articles.find(a => a.id === id);
+  const article = articles.find(a => a.slug === id || a.id === id);
 
   const relatedArticles = useMemo(() => {
     if (!article) return [];
@@ -1056,7 +1060,7 @@ const ArticlePage = () => {
   }
 
   const handleShare = (platform: string) => {
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : getCurrentUrl(`/article/${article?.id}`);
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : getCurrentUrl(article ? articleUrl(article) : '');
     const url = encodeURIComponent(currentUrl);
     const title = encodeURIComponent(article.title);
     const excerpt = encodeURIComponent(article.excerpt);
@@ -1243,7 +1247,7 @@ const ArticlePage = () => {
               <h3 className="text-2xl font-black font-serif uppercase tracking-wider mb-8 text-ink">Related Articles</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                 {relatedArticles.map((related) => (
-                  <Link key={related.id} to={`/article/${related.id}`} className="group block h-full flex flex-col">
+                  <Link key={related.id} to={articleUrl(related)} className="group block h-full flex flex-col">
                     <div className="overflow-hidden mb-4 rounded-sm border border-border">
                       {related.imageUrl ? (
                         <img 
