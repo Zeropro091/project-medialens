@@ -1117,6 +1117,18 @@ export default function AdminDashboard() {
                       resize: 'none', fontFamily: 'inherit',
                     }}
                   />
+                  {/* Subtitle — right below title */}
+                  <input
+                    type="text"
+                    placeholder="Add a subtitle…"
+                    value={editingArticle.subtitle || ''}
+                    onChange={e => setEditingArticle({ ...editingArticle, subtitle: e.target.value })}
+                    style={{
+                      width: '100%', border: 'none', outline: 'none', fontSize: 16, fontWeight: 400,
+                      color: '#6b7280', background: 'transparent', lineHeight: 1.4, marginBottom: 12,
+                      fontStyle: 'italic', fontFamily: 'Georgia, serif',
+                    }}
+                  />
 
                   {/* Meta chips */}
                   <div className="flex items-center gap-3 mb-5 pb-4 border-b" style={{ borderColor: '#e5e7eb' }}>
@@ -1160,6 +1172,39 @@ export default function AdminDashboard() {
                       }}
                     />
                     <span style={{ fontSize: 11, color: '#9ca3af' }}>or drag & drop images into the editor</span>
+                  </div>
+
+                  {/* Formatting toolbar */}
+                  <div className="flex items-center gap-1 mb-3 pb-3 border-b flex-wrap" style={{ borderColor: '#e5e7eb' }}>
+                    {[
+                      { label: 'H2', md: '\n## ', tip: 'Heading 2' },
+                      { label: 'H3', md: '\n### ', tip: 'Heading 3' },
+                      { label: 'B', md: '**', tip: 'Bold', wrap: true, style: { fontWeight: 700 } },
+                      { label: 'I', md: '*', tip: 'Italic', wrap: true, style: { fontStyle: 'italic' } },
+                      { label: '❝', md: '\n> ', tip: 'Blockquote' },
+                      { label: '—', md: '\n---\n', tip: 'Divider' },
+                      { label: '🔗', md: '[link text](url)', tip: 'Link' },
+                      { label: '• List', md: '\n- ', tip: 'Bullet list' },
+                      { label: '1. List', md: '\n1. ', tip: 'Numbered list' },
+                    ].map(btn => (
+                      <button
+                        key={btn.label}
+                        type="button"
+                        title={btn.tip}
+                        onClick={() => {
+                          const current = editingArticle.contentStr || '';
+                          if (btn.wrap) {
+                            setEditingArticle({ ...editingArticle, contentStr: current + btn.md + 'text' + btn.md });
+                          } else {
+                            setEditingArticle({ ...editingArticle, contentStr: current + btn.md });
+                          }
+                        }}
+                        className="px-2 py-1 rounded text-xs font-medium hover:bg-gray-100 transition-colors"
+                        style={{ border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 28, ...(btn.style || {}) }}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
                   </div>
 
                   {/* MDEditor */}
@@ -1372,12 +1417,6 @@ export default function AdminDashboard() {
                   <div style={{ height: 4, borderRadius: 2, background: '#e5e7eb', overflow: 'hidden', marginTop: 4 }}>
                     <div style={{ height: '100%', borderRadius: 2, background: metaLen >= 120 && metaLen <= 160 ? '#1D9E75' : metaLen > 160 ? '#ef4444' : '#f59e0b', width: `${Math.min((metaLen / 160) * 100, 100)}%`, transition: 'width 0.2s' }} />
                   </div>
-                </div>
-
-                {/* Subtitle */}
-                <div style={{ padding: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Subtitle</div>
-                  <input type="text" placeholder="Optional subtitle..." value={editingArticle.subtitle || ''} onChange={e => setEditingArticle({ ...editingArticle, subtitle: e.target.value })} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }} />
                 </div>
               </div>
             </div>
