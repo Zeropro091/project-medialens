@@ -1127,48 +1127,50 @@ const ArticlePage = () => {
           }
         }}
       />
-      <div className="w-full flex justify-center mb-8">
-        <AdSlot width="728px" height="90px" className="hidden md:flex" />
-        <AdSlot width="300px" height="250px" className="flex md:hidden" />
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 xl:col-span-9 flex flex-col">
           
-          <header className="mb-8">
-            <Link to={`/?category=${article.category}`} className="text-accent font-bold uppercase tracking-wider text-sm mb-4 inline-block hover:underline">
+          <header className="mb-6 sm:mb-8">
+            <Link to={`/?category=${article.category}`} className="text-accent font-bold uppercase tracking-wider text-xs sm:text-sm mb-3 sm:mb-4 inline-block hover:underline">
               {article.category}
             </Link>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight mb-6 leading-tight">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-3 sm:mb-6 leading-tight">
               {article.title}
             </h1>
-            <p className="text-xl text-ink-light mb-6 font-serif italic">
-              {article.subtitle}
-            </p>
+            {article.subtitle && (
+              <p className="text-base sm:text-xl text-ink-light mb-4 sm:mb-6 font-serif italic">
+                {article.subtitle}
+              </p>
+            )}
             
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-4 border-y border-border gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
-                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${article.author}`} alt={article.author} loading="lazy" decoding="async" width="48" height="48" className="w-full h-full object-cover" />
+            <div className="py-3 sm:py-4 border-y border-border space-y-3 sm:space-y-0">
+              {/* Author row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full overflow-hidden flex-shrink-0">
+                    <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${article.author}`} alt={article.author} loading="lazy" decoding="async" width="48" height="48" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <Link to={`/author/${encodeURIComponent(article.author)}`} className="font-bold text-sm sm:text-base text-ink hover:text-accent transition-colors">{article.author}</Link>
+                    <div className="text-[10px] sm:text-xs text-ink-light">{article.role}</div>
+                  </div>
                 </div>
-                <div>
-                  <Link to={`/author/${encodeURIComponent(article.author)}`} className="font-bold text-ink hover:text-accent transition-colors">{article.author}</Link>
-                  <div className="text-xs text-ink-light">{article.role}</div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between sm:justify-end space-x-6">
-                <div className="text-sm font-semibold text-ink-light uppercase tracking-wider">
+                <div className="text-xs sm:text-sm font-semibold text-ink-light uppercase tracking-wider">
                   {article.date}
                 </div>
-                <div className="flex space-x-2 sm:space-x-3 relative text-ink">
-                  <button onClick={() => handleShare('twitter')} className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-[#1DA1F2] hover:text-white transition-colors" aria-label="Share on Twitter"><Twitter className="w-4 h-4" /></button>
-                  <button onClick={() => handleShare('facebook')} className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-[#4267B2] hover:text-white transition-colors" aria-label="Share on Facebook"><Facebook className="w-4 h-4" /></button>
-                  <button onClick={() => handleShare('linkedin')} className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-[#0077B5] hover:text-white transition-colors" aria-label="Share on LinkedIn"><Linkedin className="w-4 h-4" /></button>
-                  <button onClick={() => handleShare('copy')} className="flex items-center space-x-2 px-4 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors relative" aria-label="Copy Link">
-                    <LinkIcon className="w-4 h-4" />
-                    <span className="text-sm font-semibold hidden sm:inline-block">Copy Link</span>
+              </div>
+              {/* Share row */}
+              <div className="flex items-center justify-between sm:justify-end space-x-2">
+                <div className="flex space-x-1.5 sm:space-x-2 relative text-ink">
+                  <button onClick={() => handleShare('twitter')} className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-[#1DA1F2] hover:text-white transition-colors" aria-label="Share on Twitter"><Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                  <button onClick={() => handleShare('facebook')} className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-[#4267B2] hover:text-white transition-colors" aria-label="Share on Facebook"><Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                  <button onClick={() => handleShare('linkedin')} className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-[#0077B5] hover:text-white transition-colors" aria-label="Share on LinkedIn"><Linkedin className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                  <button onClick={() => handleShare('copy')} className="flex items-center space-x-1.5 px-3 py-1 sm:px-4 sm:py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors relative" aria-label="Copy Link">
+                    <LinkIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="text-xs sm:text-sm font-semibold hidden sm:inline-block">Copy Link</span>
                     {copied && (
-                      <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink text-paper text-xs px-3 py-1.5 rounded-sm whitespace-nowrap animate-in fade-in slide-in-from-bottom-2">
+                      <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink text-paper text-xs px-3 py-1.5 rounded-sm whitespace-nowrap">
                         Link Copied!
                       </span>
                     )}
@@ -1176,10 +1178,10 @@ const ArticlePage = () => {
                   {user && (
                     <button
                       onClick={() => toggleBookmark(article.id)}
-                      className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${isBookmarked(article.id) ? 'bg-accent text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors ${isBookmarked(article.id) ? 'bg-accent text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
                       aria-label={isBookmarked(article.id) ? 'Remove bookmark' : 'Bookmark article'}
                     >
-                      {isBookmarked(article.id) ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                      {isBookmarked(article.id) ? <BookmarkCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                     </button>
                   )}
                 </div>
@@ -1204,7 +1206,7 @@ const ArticlePage = () => {
 
           <div className="prose prose-lg max-w-none font-serif text-ink leading-relaxed" data-color-mode="light">
             {/* Inline float ad — positioned in the content flow */}
-            <div className="my-10 flex flex-col items-center float-right ml-8 mb-4">
+            <div className="my-10 hidden md:flex flex-col items-center float-right ml-8 mb-4">
               <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1 not-prose">Advertisement</span>
               <AdSlot width="300px" height="250px" />
             </div>
