@@ -132,18 +132,37 @@ const AdSlot = ({ width, height, format = "auto", className = "" }: { width?: st
   const cycleRef = useRef<NodeJS.Timeout | null>(null);
   const slotIdRef = useRef(nextSlotId++); // unique per instance — drives index distribution
 
+  // Determine which ad_format matches this slot's dimensions
+  const slotFormat = (() => {
+    const w = parseInt(width || '0');
+    const h = parseInt(height || '0');
+    if (w >= 600 && h <= 100) return 'horizontal';   // 728x90 leaderboard
+    if (w === 320 && h === 50) return 'anchor';       // 320x50 mobile anchor
+    if (w === 250 && h === 200) return 'native';      // 250x200 in-feed card
+    if (w <= 400 && h >= 200) return 'vertical';      // 300x250 medium rectangle
+    if (format === 'fluid') return 'fluid';           // fluid full-width
+    return null; // unknown — show any
+  })();
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const fetched = await fetchActiveSponsors();
       if (cancelled) return;
-      setSponsors(fetched);
+      // Filter by ad_format if this slot has a known format
+      let filtered = fetched;
+      if (slotFormat) {
+        const matching = fetched.filter((s: any) => s.ad_format === slotFormat);
+        if (matching.length > 0) filtered = matching;
+        // else fall back to all sponsors
+      }
+      setSponsors(filtered);
       // Distribute starting positions so slots don't all show the same sponsor
-      if (fetched.length > 0) {
-        const startIndex = slotIdRef.current % fetched.length;
+      if (filtered.length > 0) {
+        const startIndex = slotIdRef.current % filtered.length;
         setCurrentIndex(startIndex);
         // Use this specific sponsor's frequency for the visibility gate
-        const sponsor = fetched[startIndex];
+        const sponsor = filtered[startIndex];
         setShouldShow(Math.random() < (1 / (sponsor.frequency ?? 1)));
       } else {
         setShouldShow(false);
@@ -567,7 +586,9 @@ const Sidebar = () => {
 
   return (
     <aside className="lg:col-span-4 xl:col-span-3 flex flex-col gap-8">
-      <div className="flex justify-center">
+      {/* Top sidebar ad */}
+      <div className="flex flex-col items-center">
+        <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Advertisement</span>
         <AdSlot width="300px" height="250px" />
       </div>
       
@@ -628,8 +649,10 @@ const Sidebar = () => {
         )}
       </div>
       
-      <div className="sticky top-32 flex justify-center mt-4">
-        <AdSlot width="300px" height="600px" />
+      {/* Sticky sidebar ad — stays visible while scrolling */}
+      <div className="sticky top-28 flex flex-col items-center">
+        <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Advertisement</span>
+        <AdSlot width="300px" height="250px" />
       </div>
     </aside>
   );
@@ -710,10 +733,6 @@ const HomePage = () => {
   return (
     <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
       <SEO title={seoTitle} description={seoDescription} schemaMarkup={!isFiltering ? organizationSchema : undefined} />
-      <div className="w-full flex justify-center mb-8">
-        <AdSlot width="728px" height="90px" className="hidden md:flex" />
-        <AdSlot width="320px" height="50px" className="flex md:hidden" />
-      </div>
       
       {isFiltering && (
         <div className="mb-8">
@@ -807,9 +826,16 @@ const HomePage = () => {
               )}
               
               <div className="editorial-divider-thick"></div>
+
+              {/* In-feed native ad — blends between hero and article grid */}
+              <div className="w-full flex flex-col items-center py-2">
+                <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Sponsored Content</span>
+                <AdSlot width="728px" height="90px" className="hidden md:flex" />
+                <AdSlot width="300px" height="250px" className="flex md:hidden" />
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filteredArticles.slice(1, 5).map((article) => (
+                {filteredArticles.slice(1, 3).map((article) => (
                   <Link key={article.id} to={`/article/${article.id}`} className="group cursor-pointer block">
                     <article className="flex flex-col h-full">
                       <div className="overflow-hidden mb-3 rounded-sm">
@@ -839,6 +865,47 @@ const HomePage = () => {
                   </Link>
                 ))}
               </div>
+
+              {/* More articles with inline ad card */}
+              {filteredArticles.length > 3 && (
+                <>
+                  <div className="editorial-divider my-2"></div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {filteredArticles.slice(3, 5).map((article) => (
+                      <Link key={article.id} to={`/article/${article.id}`} className="group cursor-pointer block">
+                        <article className="flex flex-col h-full">
+                          <div className="overflow-hidden mb-3 rounded-sm">
+                            {article.imageUrl ? (
+                              <img 
+                                src={article.imageUrl} 
+                                alt={article.title}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-[160px] object-cover transform group-hover:scale-105 transition-transform duration-500 bg-gray-100"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="text-xs font-bold text-accent uppercase tracking-wider mb-1">
+                            {article.category}
+                          </div>
+                          <h3 className="text-base font-bold mb-1 group-hover:text-accent transition-colors leading-snug">
+                            {article.title}
+                          </h3>
+                          <div className="mt-auto text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-2">
+                            {article.time}
+                          </div>
+                        </article>
+                      </Link>
+                    ))}
+                    {/* In-feed native ad card — looks like a content card */}
+                    <div className="flex flex-col items-center justify-center border border-dashed border-gray-200 rounded bg-gray-50/50 p-4">
+                      <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">Advertisement</span>
+                      <AdSlot width="250px" height="200px" />
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
           
@@ -848,6 +915,14 @@ const HomePage = () => {
         </div>
         
         <Sidebar />
+      </div>
+
+      {/* Bottom anchor ad — mobile only, fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden flex-col items-center bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] py-2 px-4">
+        <div className="flex items-center justify-between w-full max-w-sm">
+          <span className="text-[8px] uppercase tracking-widest text-gray-400">Ad</span>
+        </div>
+        <AdSlot width="320px" height="50px" className="mt-1" />
       </div>
     </main>
   );
@@ -969,7 +1044,7 @@ const ArticlePage = () => {
       />
       <div className="w-full flex justify-center mb-8">
         <AdSlot width="728px" height="90px" className="hidden md:flex" />
-        <AdSlot width="320px" height="50px" className="flex md:hidden" />
+        <AdSlot width="300px" height="250px" className="flex md:hidden" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1034,7 +1109,9 @@ const ArticlePage = () => {
           </figure>
 
           <div className="prose prose-lg max-w-none font-serif text-ink leading-relaxed" data-color-mode="light">
-            <div className="my-10 flex justify-center float-right ml-8 mb-4">
+            {/* Inline float ad — positioned in the content flow */}
+            <div className="my-10 flex flex-col items-center float-right ml-8 mb-4">
+              <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1 not-prose">Advertisement</span>
               <AdSlot width="300px" height="250px" />
             </div>
 
@@ -1064,8 +1141,11 @@ const ArticlePage = () => {
             )}
           </div>
 
-          <div className="w-full py-8 mt-8 border-t border-border flex justify-center">
-             <AdSlot width="100%" height="150px" format="fluid" />
+          {/* Mid-content leaderboard — full width between body and related */}
+          <div className="w-full py-6 my-6 flex flex-col items-center border-y border-border">
+            <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">Continue reading — Advertisement</span>
+            <AdSlot width="728px" height="90px" className="hidden md:flex" />
+            <AdSlot width="300px" height="250px" className="flex md:hidden" />
           </div>
 
           {relatedArticles.length > 0 && (
@@ -1294,7 +1374,7 @@ const StaticPage = ({ title }: { title: string }) => {
       <SEO title={title} description={page.description} />
       <div className="w-full flex justify-center mb-8">
         <AdSlot width="728px" height="90px" className="hidden md:flex" />
-        <AdSlot width="320px" height="50px" className="flex md:hidden" />
+        <AdSlot width="300px" height="250px" className="flex md:hidden" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

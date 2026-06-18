@@ -1357,7 +1357,16 @@ function AdManagementTab() {
     duration_seconds: 10,
     frequency: 1,
     is_active: false,
+    ad_format: 'horizontal' as string,
   });
+
+  const AD_FORMATS = [
+    { value: 'horizontal', label: 'Leaderboard', size: '728 × 90 px', w: 728, h: 90, shape: 'wide' },
+    { value: 'vertical', label: 'Medium Rectangle', size: '300 × 250 px', w: 300, h: 250, shape: 'box' },
+    { value: 'native', label: 'In-Feed Native Card', size: '250 × 200 px', w: 250, h: 200, shape: 'box' },
+    { value: 'anchor', label: 'Mobile Anchor Banner', size: '320 × 50 px', w: 320, h: 50, shape: 'wide' },
+    { value: 'fluid', label: 'Fluid Full-Width', size: '100% × 150 px', w: 970, h: 150, shape: 'wide' },
+  ] as const;
   const [isUploadingSponsorImage, setIsUploadingSponsorImage] = useState(false);
   const [isDraggingSponsorImage, setIsDraggingSponsorImage] = useState(false);
   const sponsorImageInputRef = useRef<HTMLInputElement>(null);
@@ -1383,7 +1392,7 @@ function AdManagementTab() {
   }, [role]);
 
   const resetForm = () => {
-    setForm({ name: '', image_url: '', target_url: '', duration_seconds: 10, frequency: 1, is_active: false });
+    setForm({ name: '', image_url: '', target_url: '', duration_seconds: 10, frequency: 1, is_active: false, ad_format: 'horizontal' });
     setEditingId(null);
     setShowForm(false);
   };
@@ -1396,6 +1405,7 @@ function AdManagementTab() {
       duration_seconds: sp.duration_seconds ?? 10,
       frequency: sp.frequency ?? 1,
       is_active: sp.is_active ?? false,
+      ad_format: sp.ad_format || 'horizontal',
     });
     setEditingId(sp.id);
     setShowForm(true);
@@ -1416,6 +1426,7 @@ function AdManagementTab() {
         duration_seconds: form.duration_seconds,
         frequency: form.frequency,
         is_active: form.is_active,
+        ad_format: form.ad_format,
         created_by: user?.id,
       };
 
@@ -1467,7 +1478,12 @@ function AdManagementTab() {
       });
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path);
-      return urlData.publicUrl;
+      try {
+        const u = new URL(urlData.publicUrl);
+        return u.pathname;
+      } catch {
+        return urlData.publicUrl;
+      }
     } catch (storageError) {
       console.warn('[Sponsor Image] Storage unavailable, falling back to base64:', storageError);
       return new Promise((resolve, reject) => {
@@ -1551,12 +1567,64 @@ function AdManagementTab() {
                 onChange={e => setForm({ ...form, name: e.target.value })}
               />
             </div>
+
+            {/* Ad Format Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Ad Format *</label>
+              <div className="flex flex-col gap-2">
+                {AD_FORMATS.map(fmt => (
+                  <label
+                    key={fmt.value}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg border-2 cursor-pointer transition-all ${
+                      form.ad_format === fmt.value
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="ad_format"
+                      value={fmt.value}
+                      checked={form.ad_format === fmt.value}
+                      onChange={() => setForm({ ...form, ad_format: fmt.value as any })}
+                      className="w-3.5 h-3.5"
+                    />
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-gray-800">{fmt.label}</div>
+                      <div className="text-[10px] text-gray-500">{fmt.size}</div>
+                    </div>
+                    {/* Mini preview shape */}
+                    <div
+                      className="rounded border border-gray-300 bg-gray-100 flex items-center justify-center"
+                      style={{
+                        width: fmt.shape === 'wide' ? 64 : 36,
+                        height: fmt.shape === 'wide' ? (fmt.value === 'anchor' ? 6 : fmt.value === 'fluid' ? 12 : 8) : 30,
+                        fontSize: 7,
+                        color: '#9ca3af',
+                      }}
+                    >
+                      {fmt.shape === 'wide' ? '━━━' : '▮'}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="md:col-span-2 lg:col-span-1">
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Sponsor Image</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Sponsor Image
+                <span className="text-[10px] font-normal text-gray-400 ml-1">
+                  ({AD_FORMATS.find(f => f.value === form.ad_format)?.size})
+                </span>
+              </label>
               
               {/* Upload drop zone */}
-              {form.image_url && !isUploadingSponsorImage ? (
-                <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-white group h-[100px]">
+              {(() => {
+                const fmt = AD_FORMATS.find(f => f.value === form.ad_format);
+                const previewH = fmt ? Math.min(Math.round(fmt.h * 0.6), 180) : 100;
+                const previewMaxW = fmt && fmt.shape === 'box' ? 220 : '100%';
+                return form.image_url && !isUploadingSponsorImage ? (
+                <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-white group" style={{ height: previewH, maxWidth: previewMaxW }}>
                   <img
                     src={form.image_url}
                     alt="Sponsor banner preview"
@@ -1582,7 +1650,7 @@ function AdManagementTab() {
                 </div>
               ) : (
                 <div
-                  className={`border-2 border-dashed rounded-lg h-[100px] flex flex-col items-center justify-center text-center transition-colors cursor-pointer ${
+                  className={`border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center transition-colors cursor-pointer ${
                     isDraggingSponsorImage
                       ? 'border-green-500 bg-green-50'
                       : 'border-gray-300 hover:border-gray-400 bg-white'
@@ -1596,6 +1664,7 @@ function AdManagementTab() {
                     if (file) handleSponsorImageFile(file);
                   }}
                   onClick={() => sponsorImageInputRef.current?.click()}
+                  style={{ height: previewH, maxWidth: previewMaxW }}
                 >
                   <input
                     type="file"
@@ -1624,7 +1693,8 @@ function AdManagementTab() {
                     </div>
                   )}
                 </div>
-              )}
+              );
+              })()}
               {/* Show the URL value underneath for reference */}
               {form.image_url && (
                 <input
@@ -1707,6 +1777,7 @@ function AdManagementTab() {
           <thead>
             <tr className="bg-gray-50 border-b">
               <th className="p-3 text-sm font-semibold">Sponsor</th>
+              <th className="p-3 text-sm font-semibold">Format</th>
               <th className="p-3 text-sm font-semibold">Status</th>
               <th className="p-3 text-sm font-semibold">Duration</th>
               <th className="p-3 text-sm font-semibold">Frequency</th>
@@ -1717,7 +1788,7 @@ function AdManagementTab() {
           <tbody>
             {sponsors.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500 font-medium">
+                <td colSpan={7} className="p-8 text-center text-gray-500 font-medium">
                   No sponsors yet. Click "Add Sponsor" to create one.
                 </td>
               </tr>
@@ -1740,6 +1811,23 @@ function AdManagementTab() {
                       )}
                       <div className="font-bold text-sm">{sp.name}</div>
                     </div>
+                  </td>
+                  <td className="p-3">
+                    {(() => {
+                      const badges: Record<string, { cls: string; label: string }> = {
+                        horizontal: { cls: 'bg-sky-100 text-sky-700', label: '━ 728×90' },
+                        vertical: { cls: 'bg-purple-100 text-purple-700', label: '▮ 300×250' },
+                        native: { cls: 'bg-amber-100 text-amber-700', label: '◧ 250×200' },
+                        anchor: { cls: 'bg-emerald-100 text-emerald-700', label: '▬ 320×50' },
+                        fluid: { cls: 'bg-rose-100 text-rose-700', label: '▭ Fluid' },
+                      };
+                      const b = badges[sp.ad_format] || badges.horizontal;
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${b.cls}`}>
+                          {b.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="p-3">
                     <button
