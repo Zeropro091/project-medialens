@@ -879,128 +879,132 @@ const HomePage = () => {
           ) : (
             // Default Complex Layout
             <>
-              {filteredArticles.length > 0 && (
-                <Link to={articleUrl(filteredArticles[0])} className="group cursor-pointer block">
-                  <article>
-                    <div className="relative overflow-hidden mb-4 rounded-sm">
-                      {filteredArticles[0].imageUrl ? (
-                        <img 
-                          src={filteredArticles[0].imageUrl} 
-                          alt={filteredArticles[0].title}
+              {filteredArticles.length > 0 && (() => {
+                const hero = filteredArticles[0];
+                return (
+                  <Link to={articleUrl(hero)} className="group cursor-pointer block mb-8">
+                    <article className="relative overflow-hidden rounded-sm">
+                      {hero.imageUrl ? (
+                        <img
+                          src={hero.imageUrl}
+                          alt={hero.title}
                           loading="eager"
                           decoding="async"
                           width="1200"
-                          height="800"
-                          className="w-full h-[400px] object-cover transform group-hover:scale-105 transition-transform duration-700 bg-gray-100"
+                          height="600"
+                          className="w-full h-[320px] sm:h-[420px] object-cover transform group-hover:scale-105 transition-transform duration-700 bg-gray-100"
                           referrerPolicy="no-referrer"
                         />
-                      ) : null}
-                      <div className="absolute top-4 left-4 bg-accent text-white text-xs font-bold uppercase tracking-wider px-2 py-1">
-                        {filteredArticles[0].category}
-                      </div>
-                    </div>
-                    <h2 className="text-3xl sm:text-4xl font-bold mb-3 group-hover:text-accent transition-colors leading-tight">
-                      {filteredArticles[0].title}
-                    </h2>
-                    <p className="text-ink-light text-lg mb-4 leading-relaxed">
-                      {filteredArticles[0].excerpt}
-                    </p>
-                    <div className="flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      <span className="text-ink">{filteredArticles[0].author}</span>
-                      <span className="mx-2">•</span>
-                      <span>{filteredArticles[0].time}</span>
-                    </div>
-                  </article>
-                </Link>
-              )}
-              
-              <div className="editorial-divider-thick"></div>
-
-              {/* In-feed native ad — blends between hero and article grid */}
-              <div className="w-full flex flex-col items-center py-2">
-                <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Sponsored Content</span>
-                <AdSlot width="728px" height="90px" className="hidden md:flex" />
-                <AdSlot width="300px" height="250px" className="flex md:hidden" />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filteredArticles.slice(1, 3).map((article) => (
-                  <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
-                    <article className="flex flex-col h-full">
-                      <div className="overflow-hidden mb-3 rounded-sm">
-                        {article.imageUrl ? (
-                          <img 
-                            src={article.imageUrl} 
-                            alt={article.title}
-                            loading="lazy"
-                            decoding="async"
-                            width="600"
-                            height="400"
-                            className="w-full h-[200px] object-cover transform group-hover:scale-105 transition-transform duration-500 bg-gray-100"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="text-xs font-bold text-accent uppercase tracking-wider mb-2">
-                        {article.category}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2 group-hover:text-accent transition-colors leading-snug">
-                        {article.title}
-                      </h3>
-                      <div className="mt-auto text-xs font-semibold text-gray-500 uppercase tracking-wider pt-2">
-                        {article.time}
+                      ) : (
+                        <div className="w-full h-[320px] sm:h-[420px]" style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)' }} />
+                      )}
+                      {/* Overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
+                        <div className="text-xs font-bold uppercase tracking-wider mb-3 px-2 py-1 bg-accent text-white inline-block">
+                          {hero.category}
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-3 leading-tight group-hover:text-accent transition-colors" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                          {hero.title}
+                        </h2>
+                        <p className="text-white/80 text-sm sm:text-base mb-3 line-clamp-2 max-w-2xl">
+                          {hero.excerpt}
+                        </p>
+                        <div className="flex items-center text-xs font-semibold text-white/60 uppercase tracking-wider">
+                          <span className="text-white/90">{hero.author}</span>
+                          <span className="mx-2">•</span>
+                          <span>{hero.time}</span>
+                        </div>
                       </div>
                     </article>
                   </Link>
-                ))}
-              </div>
+                );
+              })()}
 
-              {/* More articles with inline ad card */}
+              {/* 2-column feature row */}
+              {filteredArticles.length > 1 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b-2 border-ink">
+                  {filteredArticles.slice(1, 3).map((article) => {
+                    return (
+                      <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
+                        <article className="flex flex-col h-full">
+                          <div className="overflow-hidden mb-3 rounded-sm relative">
+                            {article.imageUrl ? (
+                              <img
+                                src={article.imageUrl}
+                                alt={article.title}
+                                loading="lazy"
+                                decoding="async"
+                                width="600"
+                                height="400"
+                                className="w-full h-[200px] object-cover transform group-hover:scale-105 transition-transform duration-500 bg-gray-100"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-[200px] flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)' }}>
+                                <span className="text-4xl" style={{ color: 'rgba(255,255,255,0.08)' }}>{article.category}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs font-bold text-accent uppercase tracking-wider mb-2">
+                            {article.category}
+                          </div>
+                          <h3 className="text-xl font-bold mb-2 group-hover:text-accent transition-colors leading-snug">
+                            {article.title}
+                          </h3>
+                          <p className="text-sm text-ink-light line-clamp-2 mb-2">{article.excerpt}</p>
+                          <div className="mt-auto text-xs font-semibold text-gray-500 uppercase tracking-wider pt-2">
+                            {article.author} · {article.time}
+                          </div>
+                        </article>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 3-column grid for remaining articles */}
               {filteredArticles.length > 3 && (
-                <>
-                  <div className="editorial-divider my-2"></div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {filteredArticles.slice(3, 5).map((article) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {filteredArticles.slice(3, 9).map((article) => {
+                    return (
                       <Link key={article.id} to={articleUrl(article)} className="group cursor-pointer block">
                         <article className="flex flex-col h-full">
                           <div className="overflow-hidden mb-3 rounded-sm">
                             {article.imageUrl ? (
-                              <img 
-                                src={article.imageUrl} 
+                              <img
+                                src={article.imageUrl}
                                 alt={article.title}
                                 loading="lazy"
                                 decoding="async"
                                 className="w-full h-[160px] object-cover transform group-hover:scale-105 transition-transform duration-500 bg-gray-100"
                                 referrerPolicy="no-referrer"
                               />
-                            ) : null}
+                            ) : (
+                              <div className="w-full h-[160px] flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)' }}>
+                                <span className="text-3xl font-serif" style={{ color: 'rgba(255,255,255,0.08)' }}>{article.category}</span>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xs font-bold text-accent uppercase tracking-wider mb-1">
+                          <div className="text-[11px] font-bold text-accent uppercase tracking-wider mb-1">
                             {article.category}
                           </div>
-                          <h3 className="text-base font-bold mb-1 group-hover:text-accent transition-colors leading-snug">
+                          <h3 className="text-base font-bold mb-1 group-hover:text-accent transition-colors leading-snug line-clamp-3">
                             {article.title}
                           </h3>
                           <div className="mt-auto text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-2">
-                            {article.time}
+                            {article.author} · {article.time}
                           </div>
                         </article>
                       </Link>
-                    ))}
-                    {/* In-feed native ad card — looks like a content card */}
-                    <div className="flex flex-col items-center justify-center border border-dashed border-gray-200 rounded bg-gray-50/50 p-4">
-                      <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">Advertisement</span>
-                      <AdSlot width="250px" height="200px" />
-                    </div>
-                  </div>
-                </>
+                    );
+                  })}
+                </div>
               )}
             </>
           )}
           
-          <div className="w-full py-6 border-y border-border my-4 flex justify-center">
-             <AdSlot width="100%" height="150px" format="fluid" />
-          </div>
+          {/* Removed all ad slots for cleaner look */}
         </div>
         
         <Sidebar />
@@ -1243,12 +1247,7 @@ const ArticlePage = () => {
             )}
           </div>
 
-          {/* Mid-content leaderboard — full width between body and related */}
-          <div className="w-full py-6 my-6 flex flex-col items-center border-y border-border">
-            <span className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">Continue reading — Advertisement</span>
-            <AdSlot width="728px" height="90px" className="hidden md:flex" />
-            <AdSlot width="300px" height="250px" className="flex md:hidden" />
-          </div>
+
 
           {relatedArticles.length > 0 && (
             <div className="mt-8 pt-8 border-t-4 border-ink">

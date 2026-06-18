@@ -267,6 +267,124 @@ async function createServer() {
     }
   });
 
+  // --- DEV ONLY: Google News RSS scraper for Daily Generator ---
+  app.get('/api/scrape-news', async (req, res) => {
+    const category = (req.query.category as string) || 'world';
+    const hl = (req.query.hl as string) || 'en';
+    const gl = (req.query.gl as string) || 'US';
+    const ceid = (req.query.ceid as string) || 'US:en';
+
+    // Localized search queries per language
+    const searchMaps: Record<string, Record<string, string>> = {
+      'id': {
+        'World': 'berita dunia hari ini',
+        'Politics': 'berita politik indonesia',
+        'Business': 'berita bisnis ekonomi indonesia',
+        'Tech': 'berita teknologi terbaru',
+        'Science': 'berita sains penemuan',
+        'Health': 'berita kesehatan indonesia',
+        'Sports': 'berita olahraga indonesia',
+        'Arts': 'berita seni budaya indonesia',
+      },
+      'ja': {
+        'World': '世界ニュース 今日',
+        'Politics': '政治ニュース',
+        'Business': 'ビジネス 経済ニュース',
+        'Tech': 'テクノロジーニュース',
+        'Science': '科学ニュース',
+        'Health': '健康 医療ニュース',
+        'Sports': 'スポーツニュース',
+        'Arts': '文化 芸術ニュース',
+      },
+      'ko': {
+        'World': '세계 뉴스 오늘',
+        'Politics': '정치 뉴스',
+        'Business': '경제 비즈니스 뉴스',
+        'Tech': '기술 뉴스',
+        'Science': '과학 뉴스',
+        'Health': '건강 의료 뉴스',
+        'Sports': '스포츠 뉴스',
+        'Arts': '문화 예술 뉴스',
+      },
+      'en': {
+        'World': 'world news today',
+        'Politics': 'politics news today',
+        'Business': 'business economy finance news',
+        'Tech': 'technology news today',
+        'Science': 'science discovery news',
+        'Health': 'health medical news today',
+        'Sports': 'sports news today',
+        'Arts': 'arts culture entertainment news',
+      },
+    };
+    const categoryMap = searchMaps[hl] || searchMaps['en'];
+    const query = categoryMap[category] || category + ' news';
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(rssUrl, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LensaBot/1.0)' }
+      });
+      clearTimeout(timeout);
+      const xml = await response.text();
+
+      // Parse RSS items with regex
+      const items: any[] = [];
+      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+      let match;
+      while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
+        const block = match[1];
+        const getTag = (tag: string) => {
+          const m = block.match(new RegExp(`<${tag}>\\s*(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?\\s*</${tag}>`, 's'));
+          return m ? m[1].trim() : '';
+        };
+        let title = getTag('title');
+        // Google News titles often end with " - Source Name"
+        const sourceSep = title.lastIndexOf(' - ');
+        const source = sourceSep > 0 ? title.slice(sourceSep + 3) : '';
+        if (sourceSep > 0) title = title.slice(0, sourceSep);
+
+        const link = getTag('link');
+        const pubDate = getTag('pubDate');
+        const description = getTag('description')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
+          .replace(/<[^>]+>/g, '').trim();
+
+        if (title) items.push({ title, source, link, pubDate, description });
+      }
+
+      res.json({ category, items });
+    } catch (err: any) {
+      console.error('[Scrape] Failed:', err.message);
+      res.json({ category, items: [], error: err.message });
+    }
+  });
+
+  // --- DEV ONLY: Fetch og:image from a URL ---
+  app.get('/api/fetch-og-image', async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.json({ image: null });
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const r = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LensaBot/1.0)' },
+        redirect: 'follow',
+      });
+      clearTimeout(timeout);
+      const html = await r.text();
+      const ogMatch = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i)
+        || html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+      res.json({ image: ogMatch ? ogMatch[1] : null });
+    } catch {
+      res.json({ image: null });
+    }
+  });
+
   // --- News Sitemap endpoint (Google News) — articles from last 48 hours only ---
   app.get('/news-sitemap.xml', async (_req, res) => {
     try {

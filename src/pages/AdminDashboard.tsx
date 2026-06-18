@@ -5,6 +5,7 @@ import { useArticles } from '../App';
 import { LogOut, Plus, Edit2, Trash2, Archive, CheckCircle, Database, X, UploadCloud, Mail, Sparkles, ShieldAlert, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import { useAuth } from '../components/AuthProvider';
+import DailyGeneratorTab from '../components/DailyGeneratorTab';
 
 // --- Category name → UUID mapping (matches seed.sql fixed UUIDs) ---
 const CATEGORY_UUID_MAP: Record<string, string> = {
@@ -85,7 +86,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerRole, setRegisterRole] = useState<'user' | 'poster'>('user');
-  const [activeTab, setActiveTab] = useState<'articles' | 'users' | 'ads'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'users' | 'ads' | 'daily'>('articles');
   const [profiles, setProfiles] = useState<any[]>([]);
 
   const fetchProfiles = async () => {
@@ -856,6 +857,14 @@ export default function AdminDashboard() {
               Ad Management
             </button>
           )}
+          {role === 'dev' && (
+            <button 
+              className={`pb-2 px-2 font-bold ${activeTab === 'daily' ? 'border-b-2 border-black text-black' : 'text-gray-400'}`}
+              onClick={() => setActiveTab('daily')}
+            >
+              🗞️ Daily Generator
+            </button>
+          )}
         </div>
 
         {role === 'poster' && (
@@ -1025,10 +1034,13 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : activeTab === 'ads' ? (
           /* Ad Management Tab — dev only */
           <AdManagementTab />
-        )}
+        ) : activeTab === 'daily' ? (
+          /* Daily Generator Tab — dev only */
+          <DailyGeneratorTab />
+        ) : null}
       </div>
       
       {isModalOpen && editingArticle && (() => {
